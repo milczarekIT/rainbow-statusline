@@ -31,6 +31,19 @@ type Integration interface {
 // All returns the integrations in badge order.
 func All() []Integration { return []Integration{ponytail{}, caveman{}, rtk{}, claudeMem{}} }
 
+// ForAgent drops the badges that have no data on that assistant: Ponytail and
+// Caveman read Claude Code and OpenCode flags only.
+func ForAgent(agent string) []Integration {
+	var out []Integration
+	for _, i := range All() {
+		if agent == "copilot" && (i.ID() == "ponytail" || i.ID() == "caveman") {
+			continue
+		}
+		out = append(out, i)
+	}
+	return out
+}
+
 const (
 	keyRTKTotal   = "rtk-total"
 	keyMemTotal   = "mem-total"

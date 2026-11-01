@@ -41,11 +41,13 @@ func main() {
 	s := adapter.Parse(*agent, stdin)
 	fillFromSystem(&s)
 	var badges []render.Badge
-	if *agent == "claude" {
-		if out, _, _, ok := integration.TranscriptStats(s.TranscriptPath); ok {
-			s.OutTokens = &out
+	if *agent == "claude" || *agent == "copilot" {
+		if *agent == "claude" {
+			if out, _, _, ok := integration.TranscriptStats(s.TranscriptPath); ok {
+				s.OutTokens = &out
+			}
 		}
-		for _, i := range integration.All() {
+		for _, i := range integration.ForAgent(*agent) {
 			if b, ok := i.Badge(s); ok {
 				badges = append(badges, b)
 			}

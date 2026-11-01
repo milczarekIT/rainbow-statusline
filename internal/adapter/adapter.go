@@ -8,6 +8,8 @@ func Parse(agent string, stdin []byte) model.Session {
 	switch agent {
 	case "claude":
 		return parseClaude(stdin)
+	case "copilot":
+		return parseCopilot(stdin)
 	}
 	return model.Session{}
 }

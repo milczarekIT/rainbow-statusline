@@ -55,7 +55,7 @@ func (r rtk) Badge(s model.Session) (render.Badge, bool) {
 // rtkSessionPair asks the cache for this session's saved and input tokens.
 // RTK's history has no session id; see computeRTKHook and computeRTKBash.
 func rtkSessionPair(s model.Session) (saved, input int64, ok bool) {
-	if !validSessionID(s.SessionID) {
+	if !validSessionID(s.SessionID) || s.Agent == "copilot" { // no session link on Copilot
 		return 0, 0, false
 	}
 	if s.Agent == "opencode" {

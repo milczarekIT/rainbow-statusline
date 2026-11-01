@@ -157,3 +157,13 @@ func TestOpenReadOnlyWalFileWithoutSidecars(t *testing.T) {
 }
 
 func first[T any](v T, _ bool) T { return v }
+
+func TestRTKCopilotHasTotalOnly(t *testing.T) {
+	e := setup(t)
+	seedRTK(t, e, 570, 2000)
+	e.canned[keyRTKTotal] = "5000 10000"
+	b, _ := rtk{}.Badge(model.Session{Agent: "copilot", SessionID: "sess-1"})
+	if got := text(b); got != "[RTK] (c: — | t: 5.0k · 50.0%)" {
+		t.Fatalf("got %q", got)
+	}
+}

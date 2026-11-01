@@ -95,3 +95,16 @@ func sqlOpen(path string) (*sql.DB, error) {
 	db.SetMaxOpenConns(1)
 	return db, nil
 }
+
+func TestCopilotHidesPonytailAndCaveman(t *testing.T) {
+	var ids []string
+	for _, i := range ForAgent("copilot") {
+		ids = append(ids, i.ID())
+	}
+	if got := strings.Join(ids, ","); got != "rtk,claude-mem" {
+		t.Fatalf("copilot: %q", got)
+	}
+	if len(ForAgent("claude")) != 4 {
+		t.Fatal("claude keeps all four")
+	}
+}

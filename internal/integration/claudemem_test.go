@@ -114,3 +114,18 @@ func TestMemInjectFromWorker(t *testing.T) {
 		t.Fatalf("query %q", gotQuery)
 	}
 }
+
+func TestMemCopilotHasTotalOnly(t *testing.T) {
+	e := setup(t)
+	seedMem(t, e)
+	write(t, filepath.Join(e.dir, "settings.json"), `{"enabledPlugins":{"claude-mem@thedotmack":false}}`)
+	writeTranscript(t, e)
+	s := model.Session{Agent: "copilot", SessionID: "s1", TranscriptPath: filepath.Join(e.dir, "proj")}
+	if got := text(first(claudeMem{}.Badge(s))); got != "[CLAUDE-MEM] (c: — | t: 980 · 98%)" {
+		t.Fatalf("got %q", got)
+	}
+	e.memDir = filepath.Join(e.dir, "absent")
+	if got := text(first(claudeMem{}.Badge(s))); got != "[CLAUDE-MEM off]" {
+		t.Fatalf("no data dir: %q", got)
+	}
+}

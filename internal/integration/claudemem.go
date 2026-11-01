@@ -79,6 +79,9 @@ func memText(saved, work int64, ok bool) string {
 // memSessionPair is what claude-mem injected into this session: from the
 // transcript for Claude Code, from the worker's inject endpoint for OpenCode.
 func memSessionPair(s model.Session) (saved, work int64, ok bool) {
+	if s.Agent == "copilot" { // no session link on Copilot
+		return 0, 0, false
+	}
 	if s.Agent == "opencode" {
 		if s.Cwd == "" || !validSessionID(s.SessionID) {
 			return 0, 0, false
