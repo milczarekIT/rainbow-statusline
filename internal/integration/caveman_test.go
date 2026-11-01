@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -60,7 +61,6 @@ func TestCavemanNotFull(t *testing.T) {
 		"lite":        "[CAVEMAN:LITE]",
 		"wenyan-lite": "[CAVEMAN:WENYAN-LITE]",
 		"Lite\n":      "[CAVEMAN:LITE]",
-		"off":         "[CAVEMAN:OFF]", // the plugin's own badge for off
 	} {
 		e := cavemanSetup(t, flag)
 		e.canned[keyCaveTotal] = "84100"
@@ -117,6 +117,12 @@ func TestCavemanHidden(t *testing.T) {
 		cavemanSetup(t, "\n")
 		if _, ok := caveBadge(i64(1)); ok {
 			t.Fatal("badge for an empty flag")
+		}
+	})
+	t.Run("off", func(t *testing.T) {
+		cavemanSetup(t, "off\n")
+		if b, ok := caveBadge(i64(1)); ok {
+			t.Fatalf("off shows %q", text(b))
 		}
 	})
 	t.Run("unknown mode", func(t *testing.T) {
@@ -356,5 +362,31 @@ func TestCavemanTotalKeepsProgressWhenTheRefreshIsCutOff(t *testing.T) {
 	}
 	if v, err := computeCaveTotal(t.Context()); err != nil || string(v) != "257" {
 		t.Fatalf("resumed run: %q %v", v, err)
+	}
+}
+
+func TestCavemanTotalStatErrorOtherThanMissingFails(t *testing.T) {
+	e := setup(t)
+	a, _, _, _ := projectFixture(t, e)
+	real := statFile
+	defer func() { statFile = real }()
+	statFile = func(p string) (os.FileInfo, error) {
+		if p == a {
+			return nil, fs.ErrPermission
+		}
+		return real(p)
+	}
+	if v, err := computeCaveTotal(t.Context()); err == nil {
+		t.Fatalf("undercounted total accepted: %q", v)
+	}
+	// A transcript that vanished between the listing and the stat is not an error.
+	statFile = func(p string) (os.FileInfo, error) {
+		if p == a {
+			return nil, fs.ErrNotExist
+		}
+		return real(p)
+	}
+	if v, err := computeCaveTotal(t.Context()); err != nil || string(v) != "100" {
+		t.Fatalf("vanished file: %q %v", v, err)
 	}
 }

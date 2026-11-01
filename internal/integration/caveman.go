@@ -33,6 +33,9 @@ var cavemanModes = map[string]bool{
 	"wenyan-full": true, "wenyan-ultra": true, "commit": true, "review": true, "compress": true,
 }
 
+// statFile is replaced in tests.
+var statFile = os.Stat
+
 type caveman struct{}
 
 func (caveman) ID() string { return "caveman" }
@@ -51,7 +54,7 @@ func (c caveman) Badge(s model.Session) (render.Badge, bool) {
 		return render.Badge{}, false
 	}
 	mode := cavemanMode(raw)
-	if !cavemanModes[mode] {
+	if mode == "off" || !cavemanModes[mode] {
 		return render.Badge{}, false
 	}
 	label := "[CAVEMAN]"
@@ -137,8 +140,14 @@ func sumCaveFiles(ctx context.Context, files []string, old map[string]caveEntry)
 		if err := ctx.Err(); err != nil {
 			return 0, withUnvisited(fresh, files[i:], old), err
 		}
-		info, err := os.Stat(f)
-		if err != nil || !info.Mode().IsRegular() {
+		info, err := statFile(f)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue // gone since the listing
+		}
+		if err != nil {
+			return 0, withUnvisited(fresh, files[i:], old), err // skipping it would undercount
+		}
+		if !info.Mode().IsRegular() {
 			continue
 		}
 		mtime := info.ModTime().UnixNano()
