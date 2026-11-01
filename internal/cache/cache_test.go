@@ -244,3 +244,16 @@ func TestFailedRenameRemovesTemp(t *testing.T) {
 		t.Fatalf("leftovers: %v", entries)
 	}
 }
+
+func TestPrefixKeyIsRefreshed(t *testing.T) {
+	setup(t)
+	RegisterPrefix("sess-", func(ctx context.Context, key string) ([]byte, error) {
+		return []byte("got " + key), nil
+	})
+	if err := Refresh("sess-abc"); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := Get("sess-abc", time.Minute); !ok || string(v) != "got sess-abc" {
+		t.Fatalf("got %q %v", v, ok)
+	}
+}

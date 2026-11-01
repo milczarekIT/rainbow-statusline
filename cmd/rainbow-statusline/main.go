@@ -12,6 +12,7 @@ import (
 	"github.com/milczarekIT/rainbow-statusline/internal/adapter"
 	"github.com/milczarekIT/rainbow-statusline/internal/cache"
 	"github.com/milczarekIT/rainbow-statusline/internal/config"
+	"github.com/milczarekIT/rainbow-statusline/internal/integration"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 	"github.com/milczarekIT/rainbow-statusline/internal/render"
 	"golang.org/x/term"
@@ -21,6 +22,7 @@ func main() {
 	// Drawing never crashes and never shows an error on the assistant's screen.
 	defer func() { _ = recover() }()
 
+	integration.RegisterCaches()
 	if len(os.Args) == 3 && os.Args[1] == "refresh" {
 		_ = cache.Refresh(os.Args[2])
 		return
@@ -38,8 +40,19 @@ func main() {
 	stdin, _ := io.ReadAll(os.Stdin)
 	s := adapter.Parse(*agent, stdin)
 	fillFromSystem(&s)
+	var badges []render.Badge
+	if *agent == "claude" {
+		if out, _, _, ok := integration.TranscriptStats(s.TranscriptPath); ok {
+			s.OutTokens = &out
+		}
+		for _, i := range integration.All() {
+			if b, ok := i.Badge(s); ok {
+				badges = append(badges, b)
+			}
+		}
+	}
 	width := resolveWidth(*widthFlag, os.Getenv("COLUMNS"), stderrWidth, controllingTerminalWidth)
-	fmt.Print(render.ANSI(render.Draw(s, nil, config.View{}, width)))
+	fmt.Print(render.ANSI(render.Draw(s, badges, config.View{}, width)))
 }
 
 func fillFromSystem(s *model.Session) {

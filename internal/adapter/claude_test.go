@@ -3,6 +3,7 @@ package adapter
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -163,7 +164,7 @@ func TestCwdPrefersWorkspace(t *testing.T) {
 }
 
 func TestUnknownAgentIsEmpty(t *testing.T) {
-	if s := Parse("nope", read(t, "../../testdata/claude/session-after-reply.json")); s != (model.Session{}) {
+	if s := Parse("nope", read(t, "../../testdata/claude/session-after-reply.json")); !reflect.DeepEqual(s, model.Session{}) {
 		t.Errorf("got %+v", s)
 	}
 }

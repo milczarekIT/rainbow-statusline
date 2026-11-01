@@ -22,6 +22,7 @@ const (
 var (
 	mu       sync.Mutex
 	registry = map[string]func(ctx context.Context) ([]byte, error){}
+	prefixes = map[string]func(ctx context.Context, key string) ([]byte, error){}
 
 	// baseDir and spawn are replaced in tests.
 	baseDir = defaultDir
@@ -39,11 +40,23 @@ func defaultDir() (string, error) {
 	return filepath.Join(d, "rainbow-statusline"), nil
 }
 
+// Dir is the folder holding cached values; callers may keep small input files
+// next to them.
+func Dir() (string, error) { return baseDir() }
+
 // Register tells the refresh subcommand how to compute the value for key.
 func Register(key string, fn func(ctx context.Context) ([]byte, error)) {
 	mu.Lock()
 	defer mu.Unlock()
 	registry[key] = fn
+}
+
+// RegisterPrefix computes every key that starts with prefix, for keys that
+// carry an id the refresh process cannot know in advance.
+func RegisterPrefix(prefix string, fn func(ctx context.Context, key string) ([]byte, error)) {
+	mu.Lock()
+	defer mu.Unlock()
+	prefixes[prefix] = fn
 }
 
 // validKey keeps keys usable as file names: no separators, no "..".
@@ -125,6 +138,14 @@ func Refresh(key string) error {
 	}
 	mu.Lock()
 	fn := registry[key]
+	if fn == nil {
+		for prefix, pf := range prefixes {
+			if strings.HasPrefix(key, prefix) {
+				fn = func(ctx context.Context) ([]byte, error) { return pf(ctx, key) }
+				break
+			}
+		}
+	}
 	mu.Unlock()
 	if fn == nil {
 		return errors.New("cache: key not registered")
