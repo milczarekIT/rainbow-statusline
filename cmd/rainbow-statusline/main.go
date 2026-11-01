@@ -41,15 +41,22 @@ func main() {
 	outFormat := flags.String("format", "ansi", "ansi, or json for hosts that draw the segments themselves")
 	_ = flags.Parse(os.Args[1:])
 
-	if info, err := os.Stdin.Stat(); err != nil {
+	info, err := os.Stdin.Stat()
+	if err != nil {
 		return
-	} else if info.Mode()&os.ModeCharDevice != 0 {
-		// A person at a terminal, not an assistant: open the configuration screen.
-		// Without a config file the defaults will do until the first-run guide exists.
-		cfg, _ := config.Load()
-		if err := tui.RunScreen(cfg); err != nil {
-			fmt.Fprintln(os.Stderr, "rainbow-statusline:", err)
-			os.Exit(1)
+	}
+	if info.Mode()&os.ModeCharDevice != 0 {
+		// Nothing is piped in. Only a person at a terminal, with no flags,
+		// gets the screen; /dev/null or an assistant's terminal draws nothing.
+		flagsSet := 0
+		flags.Visit(func(*flag.Flag) { flagsSet++ })
+		if wantsScreen(term.IsTerminal(int(os.Stdin.Fd())), term.IsTerminal(int(os.Stdout.Fd())), flagsSet) {
+			// Without a config file the defaults will do until the first-run guide exists.
+			cfg, _ := config.Load()
+			if err := tui.RunScreen(cfg); err != nil {
+				fmt.Fprintln(os.Stderr, "rainbow-statusline:", err)
+				os.Exit(1)
+			}
 		}
 		return
 	}
@@ -78,6 +85,12 @@ func main() {
 		return
 	}
 	fmt.Print(render.ANSI(lines))
+}
+
+// wantsScreen: the configuration screen opens for a person running the bare
+// command in a terminal, never for an assistant calling it with flags.
+func wantsScreen(stdinTTY, stdoutTTY bool, flagsSet int) bool {
+	return stdinTTY && stdoutTTY && flagsSet == 0
 }
 
 // runUninstall is the one command that reports failure: nothing is drawing here.

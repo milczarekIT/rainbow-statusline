@@ -1033,3 +1033,23 @@ func TestUninstallRestoresFilesWhenStateCannotBeSaved(t *testing.T) {
 		t.Errorf("got %q want %q", got, written)
 	}
 }
+
+func TestDetectInstalled(t *testing.T) {
+	home := sandbox(t)
+	put(t, filepath.Join(home, ".claude", "settings.json"), `{"statusLine":{"command":"my-bar --note rainbow-statusline --agent claude-ish"}}`)
+	put(t, filepath.Join(home, ".config", "opencode", "tui.json"), `{}`)
+	installed := func() map[string]bool {
+		got := map[string]bool{}
+		for _, a := range Detect() {
+			got[a.ID] = a.Installed
+		}
+		return got
+	}
+	if got := installed(); got["claude"] || got["opencode"] || got["copilot"] {
+		t.Errorf("nothing of ours is installed yet: %v", got)
+	}
+	install(t, "claude", "opencode")
+	if got := installed(); !got["claude"] || !got["opencode"] || got["copilot"] {
+		t.Errorf("after install: %v", got)
+	}
+}

@@ -152,3 +152,45 @@ func TestRunUninstallTurnsPanicIntoExitOne(t *testing.T) {
 		t.Errorf("code %d, stderr %q", code, errOut.String())
 	}
 }
+
+func TestNullStdinDrawsNothingAndExitsZero(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "rainbow-statusline")
+	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	home := t.TempDir()
+	for _, args := range [][]string{{"--agent", "claude"}, {}} {
+		cmd := exec.Command(bin, args...)
+		cmd.Env = []string{"HOME=" + home, "USERPROFILE=" + home, "XDG_CONFIG_HOME=" + home + "/cfg", "PATH="}
+		null, err := os.Open(os.DevNull)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd.Stdin = null
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		out, err := cmd.Output()
+		null.Close()
+		if err != nil || len(out) != 0 || stderr.Len() != 0 {
+			t.Errorf("%v: err %v, stdout %q, stderr %q", args, err, out, stderr.String())
+		}
+	}
+}
+
+func TestWantsScreen(t *testing.T) {
+	cases := []struct {
+		stdinTTY, stdoutTTY bool
+		flagsSet            int
+		want                bool
+	}{
+		{true, true, 0, true},
+		{true, true, 1, false}, // --agent, --width or --format was given
+		{true, false, 0, false},
+		{false, true, 0, false},
+	}
+	for _, c := range cases {
+		if got := wantsScreen(c.stdinTTY, c.stdoutTTY, c.flagsSet); got != c.want {
+			t.Errorf("%+v: got %v", c, got)
+		}
+	}
+}

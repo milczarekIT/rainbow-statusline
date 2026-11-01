@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	minWidth, minHeight = 64, 20
+	minWidth, minHeight = 64, 26
 	leftWidth           = 44
 	badgeCount          = 4 // the first rows; only these can be reordered
 )
@@ -70,6 +70,7 @@ func newScreen(cfg config.Config, plugins map[string]bool, agents []install.Agen
 		if len(cfg.Agents) == 0 {
 			sel = a.Found
 		}
+		sel = sel && a.Found
 		m.agents = append(m.agents, agentRow{Agent: a, selected: sel})
 	}
 	return m
@@ -170,9 +171,15 @@ func clamp(i, n int) int {
 
 func (m *screen) toggle() {
 	if m.onAgents {
-		if len(m.agents) > 0 {
-			m.agents[m.agentCur].selected = !m.agents[m.agentCur].selected
+		if len(m.agents) == 0 {
+			return
 		}
+		a := &m.agents[m.agentCur]
+		if !a.Found {
+			m.footer = a.Name + " was not found on this computer, so it cannot be selected."
+			return
+		}
+		a.selected = !a.selected
 		return
 	}
 	id := m.rows[m.cursor]
@@ -306,15 +313,11 @@ func (m *screen) apply(changes []install.Change) {
 		msg = "Saved. Restart " + strings.Join(names, " and ") + " to see the new status line."
 	}
 	for _, a := range m.agents {
-		if !a.selected && installedAgent(a.Agent) {
+		if !a.selected && a.Installed {
 			msg += " " + a.Name + " stays installed; run `rainbow-statusline uninstall` to remove it."
 		}
 	}
 	m.footer = msg
-}
-
-func installedAgent(a install.Agent) bool {
-	return strings.Contains(a.CurrentStatusLine, "rainbow-statusline")
 }
 
 func (m *screen) View() tea.View {
@@ -351,6 +354,7 @@ func (m *screen) body() string {
 
 	var b strings.Builder
 	b.WriteString(bold.Render("Rainbow Statusline") + "\n")
+	b.WriteString(dim.Render(lipgloss.NewStyle().Width(m.width).Render("Preview with demo data. The real bar shortens itself in narrow terminals.")) + "\n")
 	for _, l := range strings.Split(m.preview(), "\n") {
 		b.WriteString("  " + l + "\n")
 	}
@@ -403,7 +407,7 @@ func (m *screen) itemRow(i int, id string, bold, dim lipgloss.Style) string {
 func (m *screen) agentRow(i int, a agentRow, bold, dim lipgloss.Style) string {
 	line := mark(i == m.agentCur && m.onAgents, a.selected) + a.Name
 	switch {
-	case installedAgent(a.Agent):
+	case a.Installed:
 		line += "  installed"
 	case !a.Found:
 		line += "  not found"

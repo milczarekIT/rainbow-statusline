@@ -11,7 +11,7 @@ import (
 // Agent is one assistant as found on this computer.
 type Agent struct {
 	ID, Name                        string
-	Found                           bool
+	Found, Installed                bool // Installed: our status line or plugin is in place
 	SettingsPath, CurrentStatusLine string
 }
 
@@ -46,7 +46,17 @@ func Detect() []Agent {
 		if raw, err := os.ReadFile(a.SettingsPath); err == nil {
 			a.CurrentStatusLine = statusLineText(gjson.GetBytes(raw, "statusLine"))
 		}
+		a.Installed = installedNow(a)
 		out = append(out, a)
 	}
 	return out
+}
+
+// installedNow looks for our own entry where an install puts it.
+func installedNow(a Agent) bool {
+	if a.ID == "opencode" {
+		raw, err := os.ReadFile(openCodePluginPath())
+		return err == nil && isOurPlugin(raw)
+	}
+	return isOurCommand(a.CurrentStatusLine, a.ID)
 }

@@ -2,8 +2,10 @@
 package tui
 
 import (
+	"strings"
 	"time"
 
+	"charm.land/lipgloss/v2"
 	"github.com/milczarekIT/rainbow-statusline/internal/config"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 	"github.com/milczarekIT/rainbow-statusline/internal/render"
@@ -48,6 +50,60 @@ func Preview(v config.View, s model.Session) string {
 	return render.ANSI(previewLines(v, s, 0))
 }
 
+// previewLines draws the whole demo bar untrimmed and, when width is positive,
+// wraps lines that are wider at segment boundaries. Only the preview wraps:
+// the real bar shortens itself instead.
 func previewLines(v config.View, s model.Session, width int) []render.Line {
-	return render.Draw(s, demoBadges(), v, width)
+	lines := render.Draw(s, demoBadges(), v, 0)
+	if width <= 0 {
+		return lines
+	}
+	var out []render.Line
+	for _, l := range lines {
+		out = append(out, wrap(l, width)...)
+	}
+	return out
+}
+
+func wrap(l render.Line, width int) []render.Line {
+	var out []render.Line
+	var cur render.Line
+	used := 0
+	flush := func() {
+		if len(cur) > 0 {
+			out = append(out, cur)
+		}
+		cur, used = nil, 0
+	}
+	for _, seg := range l {
+		if used == 0 {
+			seg.Text = strings.TrimLeft(seg.Text, " ")
+		}
+		w := lipgloss.Width(seg.Text)
+		if used+w > width && used > 0 {
+			flush()
+			seg.Text = strings.TrimLeft(seg.Text, " ")
+			w = lipgloss.Width(seg.Text)
+		}
+		for w > width { // one segment wider than the screen: cut it
+			cut := []rune(seg.Text)
+			n := len(cut)
+			for n > 0 && lipgloss.Width(string(cut[:n])) > width {
+				n--
+			}
+			head := seg
+			head.Text = string(cut[:n])
+			cur = append(cur, head)
+			flush()
+			seg.Text = string(cut[n:])
+			w = lipgloss.Width(seg.Text)
+		}
+		if seg.Text == "" {
+			continue
+		}
+		cur = append(cur, seg)
+		used += w
+	}
+	flush()
+	return out
 }

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	screenWidth  = 200 // wide enough that nothing in the preview is trimmed
+	screenWidth  = 80
 	screenHeight = 30
 )
 
@@ -359,7 +359,7 @@ func TestPlanErrorShowsInFooter(t *testing.T) {
 func TestUnselectedInstalledAssistantIsNotUninstalled(t *testing.T) {
 	mkdir(t, filepath.Join(sandbox(t), ".config", "opencode"))
 	agents := []install.Agent{
-		{ID: "claude", Name: "Claude Code", Found: true, CurrentStatusLine: "/x/rainbow-statusline --agent claude"},
+		{ID: "claude", Name: "Claude Code", Found: true, Installed: true},
 		{ID: "opencode", Name: "OpenCode", Found: true},
 	}
 	m := newScreen(config.Config{Agents: []string{"opencode"}}, allPlugins(), agents)
@@ -409,5 +409,61 @@ func TestPreviewUsesDemoData(t *testing.T) {
 		if !strings.Contains(p, want) {
 			t.Errorf("preview lacks %q:\n%s", want, p)
 		}
+	}
+}
+
+func TestPreviewShowsEveryBadgeAtNarrowWidths(t *testing.T) {
+	for _, w := range []int{80, 64} {
+		m := newTest(t, config.Config{})
+		m.Update(tea.WindowSizeMsg{Width: w, Height: screenHeight})
+		before := plain(m.body())
+		if !strings.Contains(before, "[CLAUDE-MEM]") || !strings.Contains(before, "t: 67.5M") {
+			t.Fatalf("width %d: claude-mem missing from the preview:\n%s", w, before)
+		}
+		press(m, "down", "down", "down", "space")
+		after := plain(m.body())
+		if strings.Contains(after, "[CLAUDE-MEM]") || before == after {
+			t.Errorf("width %d: hiding claude-mem changed nothing visible:\n%s", w, after)
+		}
+		for i, l := range strings.Split(after, "\n") {
+			if got := lipgloss.Width(l); got > w {
+				t.Errorf("width %d line %d is %d cells: %q", w, i, got, l)
+			}
+		}
+		if !strings.Contains(before, "shortens") {
+			t.Errorf("width %d: note about the real bar missing", w)
+		}
+	}
+}
+
+func TestUndetectedAssistantCannotBeSelected(t *testing.T) {
+	home := sandbox(t)
+	mkdir(t, filepath.Join(home, ".claude"))
+	m := newScreen(config.Config{Agents: []string{"claude", "copilot"}}, allPlugins(), testAgents())
+	m.Update(tea.WindowSizeMsg{Width: screenWidth, Height: screenHeight})
+	if got := strings.Join(m.selectedIDs(), ","); got != "claude" {
+		t.Fatalf("copilot is not found and must be dropped: %q", got)
+	}
+	press(m, "tab", "down", "space") // copilot
+	if got := strings.Join(m.selectedIDs(), ","); got != "claude" {
+		t.Errorf("space must not select a missing assistant: %q", got)
+	}
+	if !strings.Contains(m.footer, "not found") {
+		t.Errorf("footer: %q", m.footer)
+	}
+	press(m, "s")
+	if strings.Contains(m.footer, "Error") || !strings.Contains(m.footer, "Saved") {
+		t.Errorf("save should go through: %q", m.footer)
+	}
+}
+
+func TestBarSettingsSaveWithNoAssistant(t *testing.T) {
+	sandbox(t)
+	m := newScreen(config.Config{}, allPlugins(), []install.Agent{{ID: "copilot", Name: "Copilot CLI"}})
+	m.Update(tea.WindowSizeMsg{Width: screenWidth, Height: screenHeight})
+	press(m, "space", "s")
+	cfg, found := config.Load()
+	if !found || len(cfg.Hidden) != 1 {
+		t.Errorf("bar settings should save: %v %v (%q)", found, cfg.Hidden, m.footer)
 	}
 }
