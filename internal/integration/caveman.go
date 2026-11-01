@@ -46,12 +46,19 @@ func (caveman) Detected() bool { return pluginActive(cavemanPlugin) }
 // "(c: ~saved | t: ~saved)", estimated as output tokens × 0.65/0.35 (Caveman's
 // benchmark ratio). Both numbers are estimates, so both carry "~".
 func (c caveman) Badge(s model.Session) (render.Badge, bool) {
-	if !c.Detected() {
+	installed, dir, totalKey := c.Detected, claudeDir(), keyCaveTotal
+	if s.Agent == "opencode" {
+		installed, dir, totalKey = func() bool { return ocPlugin("caveman") }, openCodeDir(), keyCaveTotalOC
+	}
+	if !installed() {
 		return render.Badge{}, false
 	}
-	raw, ok := readFlag(".caveman-active")
-	if !ok {
+	raw, err := readFlagIn(dir, ".caveman-active")
+	if err != nil {
 		return render.Badge{}, false
+	}
+	if s.Agent == "opencode" {
+		raw = strings.TrimSpace(raw) // the plugin it replaces trims its flag
 	}
 	mode := cavemanMode(raw)
 	if mode == "off" || !cavemanModes[mode] {
@@ -68,7 +75,7 @@ func (c caveman) Badge(s model.Session) (render.Badge, bool) {
 			session = *s.OutTokens
 		}
 		segs = append(segs, render.Segment{Text: " "},
-			render.Segment{Text: "(c: " + cavemanSaved(session) + " | t: " + cavemanSaved(cachedCaveTotal()) + ")", FG: cavemanColour})
+			render.Segment{Text: "(c: " + cavemanSaved(session) + " | t: " + cavemanSaved(cachedCaveTotal(totalKey)) + ")", FG: cavemanColour})
 	}
 	return render.Badge{Name: "CAVEMAN", Lines: segs}, true
 }
@@ -94,8 +101,8 @@ func cavemanSaved(out int64) string {
 	return "~" + format.Tokens(int64(float64(out)*0.65/0.35))
 }
 
-func cachedCaveTotal() int64 {
-	v, ok := cacheGet(keyCaveTotal, ageTotal)
+func cachedCaveTotal(key string) int64 {
+	v, ok := cacheGet(key, ageTotal)
 	if !ok {
 		return 0
 	}

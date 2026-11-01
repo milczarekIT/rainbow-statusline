@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"encoding/json"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestResolveWidth(t *testing.T) {
 	size := func(n int) func() int { return func() int { return n } }
@@ -25,5 +32,50 @@ func TestResolveWidth(t *testing.T) {
 		if got := resolveWidth(c.flag, c.columns, c.sources...); got != c.want {
 			t.Errorf("%s: got %d, want %d", c.name, got, c.want)
 		}
+	}
+}
+
+// runBinary builds the tool once per test and runs it in an empty home.
+func runBinary(t *testing.T, stdin string, args ...string) []byte {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "rainbow-statusline")
+	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	home := t.TempDir()
+	cmd := exec.Command(bin, args...)
+	cmd.Env = []string{"HOME=" + home, "USERPROFILE=" + home, "LOCALAPPDATA=" + home, "XDG_CONFIG_HOME=" + home + "/cfg", "XDG_DATA_HOME=" + home + "/data", "XDG_CACHE_HOME=" + home + "/cache", "PATH="}
+	cmd.Stdin = strings.NewReader(stdin)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil || stderr.Len() != 0 {
+		t.Fatalf("exit %v, stderr %q", err, stderr.String())
+	}
+	return out
+}
+
+func TestOpenCodeJSONHomeScreen(t *testing.T) {
+	for _, in := range []string{``, `not json`, `{"cwd":"/w"}`, `{"cwd":"/w","sessionID":null,"messages":null}`} {
+		out := runBinary(t, in, "--agent", "opencode", "--format", "json")
+		var lines [][]struct {
+			Text string `json:"text"`
+			FG   string `json:"fg"`
+			Bold bool   `json:"bold"`
+			Dim  bool   `json:"dim"`
+		}
+		if err := json.Unmarshal(out, &lines); err != nil {
+			t.Fatalf("%q: %v: %s", in, err, out)
+		}
+		if !strings.Contains(string(out), "—") || !strings.Contains(string(out), "[RTK off]") || !strings.Contains(string(out), "[CLAUDE-MEM off]") {
+			t.Errorf("%q: %s", in, out)
+		}
+	}
+}
+
+func TestDefaultFormatStaysANSI(t *testing.T) {
+	out := runBinary(t, `{}`, "--agent", "opencode")
+	if !strings.Contains(string(out), "\x1b[") || json.Valid(out) {
+		t.Errorf("got %q", out)
 	}
 }

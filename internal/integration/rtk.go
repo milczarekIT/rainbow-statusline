@@ -41,7 +41,11 @@ func (rtk) Detected() bool {
 }
 
 func (r rtk) Badge(s model.Session) (render.Badge, bool) {
-	if !r.Detected() {
+	installed := r.Detected()
+	if s.Agent == "opencode" {
+		installed = ocPlugin("rtk")
+	}
+	if !installed {
 		return offBadge("RTK"), true
 	}
 	c := format.Dash

@@ -106,6 +106,7 @@ func TestMemInjectFromWorker(t *testing.T) {
 	old := workerURL
 	workerURL = srv.URL
 	defer func() { workerURL = old }()
+	ocInstall(t, e, "claude-mem")
 	s := model.Session{Agent: "opencode", SessionID: "ses_1", Cwd: "/a b/c"}
 	if got := text(first(claudeMem{}.Badge(s))); got != "[CLAUDE-MEM] (c: 1.0k · 50% | t: 980 · 98%)" {
 		t.Fatalf("got %q", got)

@@ -128,6 +128,7 @@ func TestRTKOpenCodeBashMatch(t *testing.T) {
 		`insert into commands values (2,'2026-11-01T10:00:03.000000+00:00','ls','rtk git log',2000,0,570,0,100,'')`,
 		`insert into commands values (3,'2026-11-01T10:30:00.000000+00:00','ls','rtk ls -la',2000,0,570,0,100,'')`)
 	base := time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC).UnixMilli()
+	ocInstall(t, e, "rtk")
 	s := model.Session{Agent: "opencode", SessionID: "ses_abc123", BashRuns: []model.BashRun{
 		{Cmd: "cd x && rtk ls -la", Start: base + 1000, End: base + 3000},
 		{Cmd: "echo hi", Start: base, End: base + 100},

@@ -32,6 +32,7 @@ func main() {
 	flags.SetOutput(io.Discard)
 	agent := flags.String("agent", "claude", "assistant whose input arrives on stdin")
 	widthFlag := flags.Int("width", 0, "columns available to the status line")
+	outFormat := flags.String("format", "ansi", "ansi, or json for hosts that draw the segments themselves")
 	_ = flags.Parse(os.Args[1:])
 
 	if info, err := os.Stdin.Stat(); err != nil || info.Mode()&os.ModeCharDevice != 0 {
@@ -41,7 +42,8 @@ func main() {
 	s := adapter.Parse(*agent, stdin)
 	fillFromSystem(&s)
 	var badges []render.Badge
-	if *agent == "claude" || *agent == "copilot" {
+	if *agent == "claude" || *agent == "copilot" || *agent == "opencode" {
+		integration.RecordCaveSession(s)
 		if *agent == "claude" {
 			if out, _, _, ok := integration.TranscriptStats(s.TranscriptPath); ok {
 				s.OutTokens = &out
@@ -54,7 +56,12 @@ func main() {
 		}
 	}
 	width := resolveWidth(*widthFlag, os.Getenv("COLUMNS"), stderrWidth, controllingTerminalWidth)
-	fmt.Print(render.ANSI(render.Draw(s, badges, config.View{}, width)))
+	lines := render.Draw(s, badges, config.View{}, width)
+	if *outFormat == "json" {
+		_, _ = os.Stdout.Write(render.JSON(lines))
+		return
+	}
+	fmt.Print(render.ANSI(lines))
 }
 
 func fillFromSystem(s *model.Session) {

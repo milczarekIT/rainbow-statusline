@@ -72,7 +72,7 @@ var (
 // RegisterCaches teaches the cache how to compute every key this package reads.
 // Both the drawing process and the refresh process must call it first.
 func RegisterCaches() {
-	for _, key := range []string{keyRTKTotal, keyMemTotal, keyCaveTotal} {
+	for _, key := range []string{keyRTKTotal, keyMemTotal, keyCaveTotal, keyCaveTotalOC} {
 		cache.Register(key, func(ctx context.Context) ([]byte, error) { return compute(ctx, key) })
 	}
 	for _, p := range []string{prefixRTKHook, prefixRTKBash, prefixTx, prefixMemInj} {
@@ -91,6 +91,8 @@ func compute(ctx context.Context, key string) ([]byte, error) {
 		return computeMemTotal(ctx)
 	case key == keyCaveTotal:
 		return computeCaveTotal(ctx)
+	case key == keyCaveTotalOC:
+		return computeCaveTotalOC(ctx)
 	case strings.HasPrefix(key, prefixRTKHook):
 		return computeRTKHook(ctx, strings.TrimPrefix(key, prefixRTKHook))
 	case strings.HasPrefix(key, prefixRTKBash):
@@ -121,7 +123,7 @@ func pruneOld() {
 	for _, e := range entries {
 		n := e.Name()
 		if e.IsDir() || !(strings.HasPrefix(n, prefixRTKHook) || strings.HasPrefix(n, prefixRTKBash) ||
-			strings.HasPrefix(n, prefixTx) || strings.HasPrefix(n, prefixMemInj)) {
+			strings.HasPrefix(n, prefixTx) || strings.HasPrefix(n, prefixMemInj) || strings.HasPrefix(n, prefixCaveSeen)) {
 			continue
 		}
 		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > maxFileAge {

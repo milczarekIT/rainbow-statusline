@@ -2,6 +2,7 @@ package integration
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -59,18 +60,27 @@ const flagBytes = 16
 // readFlag reads the start of a plugin's mode flag. A symlink or anything but
 // a regular file is refused, so a link cannot make the bar print another file.
 func readFlag(name string) (string, bool) {
-	p := filepath.Join(claudeDir(), name)
-	if info, err := os.Lstat(p); err != nil || !info.Mode().IsRegular() {
-		return "", false
+	raw, err := readFlagIn(claudeDir(), name)
+	return raw, err == nil
+}
+
+func readFlagIn(dir, name string) (string, error) {
+	p := filepath.Join(dir, name)
+	info, err := os.Lstat(p)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", errors.New("flag: not a regular file")
 	}
 	f, err := os.Open(p)
 	if err != nil {
-		return "", false
+		return "", err
 	}
 	defer f.Close()
 	buf, err := io.ReadAll(io.LimitReader(f, flagBytes))
 	if err != nil {
-		return "", false
+		return "", err
 	}
-	return string(buf), true
+	return string(buf), nil
 }

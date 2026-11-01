@@ -60,7 +60,11 @@ func claudePluginEnabled() bool {
 }
 
 func (m claudeMem) Badge(s model.Session) (render.Badge, bool) {
-	if !m.Detected() || (s.Agent == "claude" && !claudePluginEnabled()) {
+	installed := m.Detected() && (s.Agent != "claude" || claudePluginEnabled())
+	if s.Agent == "opencode" {
+		installed = ocPlugin("claude-mem")
+	}
+	if !installed {
 		return offBadge("CLAUDE-MEM"), true
 	}
 	saved, work, ok := memSessionPair(s)

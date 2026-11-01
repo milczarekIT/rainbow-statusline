@@ -17,10 +17,11 @@ import (
 // computed on the spot, the way a finished refresh would have stored them;
 // keys in canned return a fixed value instead.
 type env struct {
-	dir    string
-	rtkDB  string
-	memDir string
-	canned map[string]string
+	dir                     string
+	rtkDB                   string
+	memDir                  string
+	ocDir, ocDB, oldCaveLog string
+	canned                  map[string]string
 }
 
 func setup(t *testing.T) *env {
@@ -30,6 +31,13 @@ func setup(t *testing.T) *env {
 	e.memDir = filepath.Join(e.dir, "claude-mem")
 	oldGet, oldIn, oldLook, oldDB := cacheGet, inputDir, lookPath, rtkDBPath
 	oldMem, oldSet, oldClaude := claudeMemDir, claudeSettings, claudeDir
+	oldOC, oldOCDB, oldLog := openCodeDir, openCodeDB, oldCaveLogPath
+	e.ocDir = filepath.Join(e.dir, "opencode")
+	e.ocDB = filepath.Join(e.dir, "data", "opencode.db")
+	e.oldCaveLog = filepath.Join(e.dir, "old-cache", "cave-sessions")
+	openCodeDir = func() string { return e.ocDir }
+	openCodeDB = func() string { return e.ocDB }
+	oldCaveLogPath = func() string { return e.oldCaveLog }
 	cacheGet = func(key string, _ time.Duration) ([]byte, bool) {
 		if v, ok := e.canned[key]; ok {
 			return []byte(v), true
@@ -48,6 +56,7 @@ func setup(t *testing.T) *env {
 	t.Cleanup(func() {
 		cacheGet, inputDir, lookPath, rtkDBPath = oldGet, oldIn, oldLook, oldDB
 		claudeMemDir, claudeSettings, claudeDir = oldMem, oldSet, oldClaude
+		openCodeDir, openCodeDB, oldCaveLogPath = oldOC, oldOCDB, oldLog
 	})
 	return e
 }

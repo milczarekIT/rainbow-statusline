@@ -257,6 +257,7 @@ func TestWorkerRedirectIsNotFollowed(t *testing.T) {
 	defer worker.Close()
 	workerURL = worker.URL
 	defer func() { workerURL = workerBase }()
+	ocInstall(t, e, "claude-mem")
 	s := model.Session{Agent: "opencode", SessionID: "ses_1", Cwd: "/w"}
 	if got := text(first(claudeMem{}.Badge(s))); !strings.Contains(got, "(c: — |") || contacted {
 		t.Fatalf("got %q contacted=%v", got, contacted)
@@ -273,6 +274,7 @@ func TestWorkerNon200IsIgnored(t *testing.T) {
 	defer srv.Close()
 	workerURL = srv.URL
 	defer func() { workerURL = workerBase }()
+	ocInstall(t, e, "claude-mem")
 	s := model.Session{Agent: "opencode", SessionID: "ses_1", Cwd: "/w"}
 	if got := text(first(claudeMem{}.Badge(s))); !strings.Contains(got, "(c: — |") {
 		t.Fatalf("got %q", got)
@@ -315,6 +317,7 @@ func TestMemInjectIsPerSessionAndRefetchedOnlyAfter23Hours(t *testing.T) {
 		}
 		return en.v, true
 	}
+	ocInstall(t, e, "claude-mem")
 	a := model.Session{Agent: "opencode", SessionID: "ses_a", Cwd: "/w"}
 	for range 2 {
 		claudeMem{}.Badge(a)

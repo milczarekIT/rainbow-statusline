@@ -20,6 +20,8 @@ type Session struct {
 	// BashRuns are the session's completed shell commands, for assistants whose
 	// history carries no session id on RTK's side (OpenCode).
 	BashRuns []BashRun
+	// StartedAt is when the session's first message was created (OpenCode).
+	StartedAt *time.Time
 }
 
 // BashRun is one shell command of a session; Start and End are ms since epoch.
