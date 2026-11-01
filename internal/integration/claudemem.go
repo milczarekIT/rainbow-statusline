@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ import (
 const (
 	claudeMemPlugin = "claude-mem@thedotmack"
 	workerBase      = "http://127.0.0.1:37777"
+	maxTokens       = 1e12
 )
 
 var (
@@ -78,12 +80,14 @@ func memText(saved, work int64, ok bool) string {
 // transcript for Claude Code, from the worker's inject endpoint for OpenCode.
 func memSessionPair(s model.Session) (saved, work int64, ok bool) {
 	if s.Agent == "opencode" {
-		if s.Cwd == "" {
+		if s.Cwd == "" || !validSessionID(s.SessionID) {
 			return 0, 0, false
 		}
-		key := hashKey(prefixMemInj, s.Cwd)
+		// Like the OpenCode plugin, read once per session: the cache value is
+		// good for as long as the cache keeps it.
+		key := memInjectKey(s.SessionID, s.Cwd)
 		putInput(key, []byte(s.Cwd))
-		return cachedPair(key, ageTotal)
+		return cachedPair(key, ageForever)
 	}
 	_, saved, work, ok = TranscriptStats(s.TranscriptPath)
 	return saved, work, ok
@@ -118,7 +122,12 @@ func TranscriptStats(path string) (out, memSaved, memWork int64, ok bool) {
 	return n[0], n[1], n[2], true
 }
 
-func computeTranscript(key string) ([]byte, error) {
+// memInjectKey names the inject result of one session in one folder.
+func memInjectKey(sessionID, cwd string) string {
+	return hashKey(prefixMemInj+sessionID+"-", cwd)
+}
+
+func computeTranscript(ctx context.Context, key string) ([]byte, error) {
 	raw, err := getInput(key)
 	if err != nil {
 		return nil, err
@@ -128,20 +137,24 @@ func computeTranscript(key string) ([]byte, error) {
 		return nil, errors.New("transcript: input does not match key")
 	}
 	files := []string{path}
-	sub, _ := filepath.Glob(filepath.Join(strings.TrimSuffix(path, ".jsonl"), "subagents", "*.jsonl"))
-	sort.Strings(sub)
-	files = append(files, sub...)
+	subDir := filepath.Join(strings.TrimSuffix(path, ".jsonl"), "subagents")
+	entries, err := os.ReadDir(subDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+	for _, e := range entries { // sorted by name; a literal listing, not a glob
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".jsonl") {
+			files = append(files, filepath.Join(subDir, e.Name()))
+		}
+	}
 
 	byID := map[string]int64{}
 	var saved, work int64
-	readAny := false
 	for _, f := range files {
-		if scanTranscript(f, byID, &saved, &work) == nil {
-			readAny = true
+		// A file we cannot fully read would undercount, so it is an error.
+		if err := scanTranscript(ctx, f, byID, &saved, &work); err != nil {
+			return nil, err
 		}
-	}
-	if !readAny {
-		return nil, errors.New("transcript: unreadable")
 	}
 	var out int64
 	for _, n := range byID {
@@ -166,7 +179,7 @@ type transcriptLine struct {
 	} `json:"attachment"`
 }
 
-func scanTranscript(path string, byID map[string]int64, saved, work *int64) error {
+func scanTranscript(ctx context.Context, path string, byID map[string]int64, saved, work *int64) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -174,6 +187,9 @@ func scanTranscript(path string, byID map[string]int64, saved, work *int64) erro
 	defer f.Close()
 	r := bufio.NewReaderSize(f, 1<<20)
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		line, err := r.ReadBytes('\n')
 		if len(line) > 0 {
 			applyLine(line, byID, saved, work)
@@ -202,8 +218,13 @@ func applyLine(line []byte, byID map[string]int64, saved, work *int64) {
 			return
 		}
 		var n int64
-		if o := e.Message.Usage.Output; o != nil && *o > 0 {
-			n = int64(*o)
+		if o := e.Message.Usage.Output; o != nil {
+			if math.IsNaN(*o) || math.IsInf(*o, 0) || *o > maxTokens {
+				return
+			}
+			if *o > 0 {
+				n = int64(*o)
+			}
 		}
 		byID[id] = max(byID[id], n)
 	case e.Type == "attachment" && e.Attachment.HookEvent == "SessionStart":
@@ -262,7 +283,9 @@ func computeMemInject(ctx context.Context, key string) ([]byte, error) {
 		return nil, err
 	}
 	cwd := string(raw)
-	if hashKey(prefixMemInj, cwd) != key {
+	rest := strings.TrimPrefix(key, prefixMemInj)
+	i := strings.LastIndex(rest, "-")
+	if i < 0 || !validSessionID(rest[:i]) || memInjectKey(rest[:i], cwd) != key {
 		return nil, errors.New("claude-mem: input does not match key")
 	}
 	q := url.Values{"cwd": {cwd}}
@@ -275,11 +298,16 @@ func computeMemInject(ctx context.Context, key string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	// A redirect could send the request off 127.0.0.1, so none is followed.
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("claude-mem: worker answered " + resp.Status)
+	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return nil, err

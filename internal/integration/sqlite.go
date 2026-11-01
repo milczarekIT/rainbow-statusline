@@ -34,12 +34,14 @@ func dsn(path string, immutable bool) string {
 	return (&url.URL{Scheme: "file", Path: p, RawQuery: q.Encode()}).String()
 }
 
-// OpenReadOnly opens an existing database without ever writing to it. It reads
-// through the normal locking protocol, so a live WAL database shows its latest
+// OpenReadOnly opens an existing database without writing to it. It reads
+// through SQLite's normal locking, so a live WAL database shows its latest
 // commits and a lock held by a writer ends in a 500 ms timeout, never in stale
 // data. Only when SQLite cannot open the file at all (a WAL-format file with no
 // -shm/-wal beside it, which a read-only handle cannot create, as RTK's history
-// is) does it retry with immutable=1, where nothing else can be missing.
+// is) does it retry with immutable=1. That mode ignores locks and writers: if
+// the owner writes meanwhile, the read can be stale or fail as "malformed".
+// Callers treat any error as no value.
 func OpenReadOnly(path string) (*sql.DB, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, err

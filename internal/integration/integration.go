@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/milczarekIT/rainbow-statusline/internal/cache"
@@ -43,6 +44,7 @@ const (
 	ageTotal   = 60 * time.Second
 	ageSession = 30 * time.Second
 	ageScan    = 5 * time.Second
+	ageForever = 1000 * time.Hour // the cache hides values older than a day anyway
 )
 
 var (
@@ -68,6 +70,7 @@ func RegisterCaches() {
 // compute is the refresh side of every key. Anything a key stands for beyond
 // its name comes from a validated id or an input file written by the draw side.
 func compute(ctx context.Context, key string) ([]byte, error) {
+	pruneOnce.Do(pruneOld)
 	switch {
 	case key == keyRTKTotal:
 		return computeRTKTotal(ctx)
@@ -78,11 +81,38 @@ func compute(ctx context.Context, key string) ([]byte, error) {
 	case strings.HasPrefix(key, prefixRTKBash):
 		return computeRTKBash(ctx, key)
 	case strings.HasPrefix(key, prefixTx):
-		return computeTranscript(key)
+		return computeTranscript(ctx, key)
 	case strings.HasPrefix(key, prefixMemInj):
 		return computeMemInject(ctx, key)
 	}
 	return nil, errors.New("integration: unknown key")
+}
+
+var pruneOnce sync.Once
+
+const maxFileAge = 48 * time.Hour
+
+// pruneOld deletes per-session cache values, locks and input files (which may
+// hold command text) that nobody has touched for two days.
+func pruneOld() {
+	dir, err := inputDir()
+	if err != nil {
+		return
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		n := e.Name()
+		if e.IsDir() || !(strings.HasPrefix(n, prefixRTKHook) || strings.HasPrefix(n, prefixRTKBash) ||
+			strings.HasPrefix(n, prefixTx) || strings.HasPrefix(n, prefixMemInj)) {
+			continue
+		}
+		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) > maxFileAge {
+			_ = os.Remove(filepath.Join(dir, n))
+		}
+	}
 }
 
 func validSessionID(id string) bool { return sessionIDPattern.MatchString(id) }
@@ -103,7 +133,7 @@ func putInput(key string, data []byte) {
 	if old, err := os.ReadFile(p); err == nil && string(old) == string(data) {
 		return
 	}
-	if os.MkdirAll(dir, 0o755) != nil {
+	if os.MkdirAll(dir, 0o700) != nil {
 		return
 	}
 	tmp, err := os.CreateTemp(dir, key+".intmp*")
@@ -112,7 +142,7 @@ func putInput(key string, data []byte) {
 	}
 	_, werr := tmp.Write(data)
 	cerr := tmp.Close()
-	if werr != nil || cerr != nil || os.Rename(tmp.Name(), p) != nil {
+	if werr != nil || cerr != nil || os.Chmod(tmp.Name(), 0o600) != nil || os.Rename(tmp.Name(), p) != nil {
 		_ = os.Remove(tmp.Name())
 	}
 }

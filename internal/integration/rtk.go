@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,12 @@ var (
 	lookPath      = exec.LookPath
 	rtkDBPath     = findRTKDB
 	rtkBinaryName = "rtk"
+	runRTKGain    = func(ctx context.Context) ([]byte, error) {
+		cmd := exec.CommandContext(ctx, rtkBinaryName, "gain", "-f", "json")
+		hideWindow(cmd)
+		cmd.WaitDelay = 2 * time.Second
+		return cmd.Output()
+	}
 )
 
 type rtk struct{}
@@ -77,26 +84,31 @@ func findRTKDB() string {
 	if err != nil {
 		return ""
 	}
-	var dirs []string
-	switch runtime.GOOS {
-	case "darwin":
-		dirs = []string{filepath.Join(home, "Library", "Application Support", "rtk")}
-	case "windows":
-		dirs = []string{
-			filepath.Join(os.Getenv("LOCALAPPDATA"), "rtk"),
-			filepath.Join(os.Getenv("APPDATA"), "rtk"),
-			filepath.Join(home, ".local", "share", "rtk"),
-		}
-	default:
-		dirs = []string{filepath.Join(home, ".local", "share", "rtk")}
-	}
-	for _, d := range dirs {
+	for _, d := range rtkDirs(runtime.GOOS, home, os.Getenv) {
 		p := filepath.Join(d, "history.db")
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
 	}
 	return ""
+}
+
+// rtkDirs lists where RTK keeps its history. An unset environment variable
+// would leave a relative path, which a project folder could fill, so it is skipped.
+func rtkDirs(goos, home string, getenv func(string) string) []string {
+	switch goos {
+	case "darwin":
+		return []string{filepath.Join(home, "Library", "Application Support", "rtk")}
+	case "windows":
+		var dirs []string
+		for _, v := range []string{"LOCALAPPDATA", "APPDATA"} {
+			if base := getenv(v); base != "" {
+				dirs = append(dirs, filepath.Join(base, "rtk"))
+			}
+		}
+		return append(dirs, filepath.Join(home, ".local", "share", "rtk"))
+	}
+	return []string{filepath.Join(home, ".local", "share", "rtk")}
 }
 
 func openRTK() (*sql.DB, error) {
@@ -111,21 +123,21 @@ func openRTK() (*sql.DB, error) {
 func computeRTKTotal(ctx context.Context) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, rtkBinaryName, "gain", "-f", "json").Output()
+	out, err := runRTKGain(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var r struct {
 		Summary struct {
-			Saved *json.Number `json:"total_saved"`
-			Input *json.Number `json:"total_input"`
+			Saved *json.RawMessage `json:"total_saved"`
+			Input *json.RawMessage `json:"total_input"`
 		} `json:"summary"`
 	}
 	if err := json.Unmarshal(out, &r); err != nil || r.Summary.Saved == nil || r.Summary.Input == nil {
 		return nil, errors.New("rtk: unexpected gain output")
 	}
-	saved, err1 := r.Summary.Saved.Int64()
-	input, err2 := r.Summary.Input.Int64()
+	saved, err1 := strconv.ParseInt(string(*r.Summary.Saved), 10, 64)
+	input, err2 := strconv.ParseInt(string(*r.Summary.Input), 10, 64)
 	if err1 != nil || err2 != nil {
 		return nil, errors.New("rtk: unexpected gain numbers")
 	}
@@ -242,7 +254,7 @@ func computeRTKBash(ctx context.Context, key string) ([]byte, error) {
 	defer cancel()
 	rows, err := db.QueryContext(ctx,
 		`select timestamp, rtk_cmd, saved_tokens, input_tokens from commands where timestamp >= ?1`,
-		time.UnixMilli(since-1000).UTC().Format("2006-01-02T15:04:05.000Z"))
+		time.UnixMilli(since-1000).UTC().Format("2006-01-02T15:04:05.000000+00:00"))
 	if err != nil {
 		return nil, err
 	}
