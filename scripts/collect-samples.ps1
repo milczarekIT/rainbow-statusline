@@ -106,7 +106,11 @@ function OpenCodeStage {
     if ($id) {
       $sid = ($id.Matches[0].Value)
       $p = Join-Path $Raw 'opencode-export.json'
-      [IO.File]::WriteAllText($p, ((& opencode export $sid) -join "`n"), $Utf8)
+      $oldEnc = [Console]::OutputEncoding
+      try {
+        [Console]::OutputEncoding = [Text.Encoding]::UTF8
+        [IO.File]::WriteAllText($p, ((& opencode export $sid) -join "`n"), $Utf8)
+      } finally { [Console]::OutputEncoding = $oldEnc }
       if (-not (Test-Path -LiteralPath $p) -or (Get-Item -LiteralPath $p).Length -eq 0) {
         "opencode export produced no output for session $sid; the OpenCode sample is missing"
       }
