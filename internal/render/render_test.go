@@ -182,6 +182,21 @@ func TestEstimatedCacheTimerHasTilde(t *testing.T) {
 	}
 }
 
+func TestEstimatedCacheHasNoTTLLabel(t *testing.T) {
+	freeze(t)
+	s := fullSession()
+	s.CacheEstimated, s.CacheTTL = true, ""
+	l := cacheSegments(s, false)
+	if got := l[len(l)-1].Text; got != "⏱ ~30:00" {
+		t.Errorf("last segment %q", got)
+	}
+	s.CacheEstimated = false
+	l = cacheSegments(s, false)
+	if got := l[len(l)-1].Text; got != "?" {
+		t.Errorf("a measured cache with no TTL keeps ?: %q", got)
+	}
+}
+
 func TestContextColourThresholds(t *testing.T) {
 	cases := []struct {
 		used int64

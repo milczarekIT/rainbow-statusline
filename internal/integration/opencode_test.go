@@ -126,6 +126,8 @@ func TestOpenCodeCaveman(t *testing.T) {
 		"full":    "[CAVEMAN] (c: ~650 | t: ~156.2k)",
 		"full \n": "[CAVEMAN] (c: ~650 | t: ~156.2k)",
 		"ultra":   "[CAVEMAN:ULTRA]",
+		"newmode": "[CAVEMAN:NEWMODE]",
+		"<x>":     "",
 		"off":     "",
 	} {
 		write(t, flagPath, flag)

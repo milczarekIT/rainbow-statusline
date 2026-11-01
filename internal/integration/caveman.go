@@ -27,12 +27,6 @@ const (
 // cavemanFullBanner is what Caveman injects at the start of a session in full mode.
 var cavemanFullBanner = []byte("CAVEMAN MODE ACTIVE — level: full")
 
-// cavemanModes are the modes the plugin's own status line accepts.
-var cavemanModes = map[string]bool{
-	"off": true, "lite": true, "full": true, "ultra": true, "wenyan-lite": true, "wenyan": true,
-	"wenyan-full": true, "wenyan-ultra": true, "commit": true, "review": true, "compress": true,
-}
-
 // statFile is replaced in tests.
 var statFile = os.Stat
 
@@ -60,8 +54,8 @@ func (c caveman) Badge(s model.Session) (render.Badge, bool) {
 	if s.Agent == "opencode" {
 		raw = strings.TrimSpace(raw) // the plugin it replaces trims its flag
 	}
-	mode := cavemanMode(raw)
-	if mode == "off" || !cavemanModes[mode] {
+	mode := strings.ToLower(strings.TrimSpace(raw))
+	if mode == "off" || !modePattern.MatchString(mode) {
 		return render.Badge{}, false
 	}
 	label := "[CAVEMAN]"
@@ -78,18 +72,6 @@ func (c caveman) Badge(s model.Session) (render.Badge, bool) {
 			render.Segment{Text: "(c: " + cavemanSaved(session) + " | t: " + cavemanSaved(cachedCaveTotal(totalKey)) + ")", FG: cavemanColour})
 	}
 	return render.Badge{Name: "CAVEMAN", Lines: segs}, true
-}
-
-// cavemanMode is the plugin's cleaning of the flag: no CR/LF, lower case,
-// only [a-z0-9-].
-func cavemanMode(raw string) string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(raw) {
-		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
 }
 
 // cavemanSaved turns output tokens into the estimated tokens saved, or a dash

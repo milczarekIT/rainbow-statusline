@@ -10,13 +10,10 @@ import (
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 )
 
-// OpenCode reports no cache expiry. As in the plugin this replaces, the timer
-// assumes Anthropic's default 5 minutes from the last response, so it is an
-// estimate and its TTL carries "~".
-const (
-	openCodeCacheLife = 300_000 // ms
-	openCodeCacheTTL  = "~5m"
-)
+// openCodeCacheLife is in ms. OpenCode reports no cache expiry; as in the plugin
+// this replaces, the timer assumes Anthropic's default 5 minutes from the last
+// response, so it is an estimate.
+const openCodeCacheLife = 300_000
 
 // openCodeInput is what plugin/opencode/tui.tsx collects from the TUI API.
 type openCodeInput struct {
@@ -81,7 +78,6 @@ func parseOpenCode(stdin []byte) model.Session {
 			s.ContextUsed = &used
 		}
 	}
-	s.CacheTTL = openCodeCacheTTL
 	s.CacheEstimated = true
 	if done := positive(last.Completed); done != nil {
 		at := time.UnixMilli(*done + openCodeCacheLife)

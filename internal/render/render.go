@@ -200,12 +200,8 @@ func cacheSegments(s model.Session, short bool) Line {
 	if short {
 		return Line{timer(s)}
 	}
-	ttl := s.CacheTTL
-	if ttl == "" {
-		ttl = "?"
-	}
 	dot := Segment{Text: " · ", Dim: true}
-	return Line{
+	l := Line{
 		{Text: "⚡", FG: "38;5;39"},
 		{Text: " "},
 		{Text: "read ", Dim: true},
@@ -215,9 +211,15 @@ func cacheSegments(s model.Session, short bool) Line {
 		{Text: optionalK(s.CacheWrite), FG: "38;5;213"},
 		dot,
 		timer(s),
-		{Text: " "},
-		{Text: ttl, Dim: true},
 	}
+	if s.CacheEstimated { // the timer's "~" already says the life is assumed
+		return l
+	}
+	ttl := s.CacheTTL
+	if ttl == "" {
+		ttl = "?"
+	}
+	return append(l, Segment{Text: " "}, Segment{Text: ttl, Dim: true})
 }
 
 // maxCacheLeft is far beyond any cache TTL; a longer countdown is not believable.

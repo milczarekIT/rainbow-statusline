@@ -113,7 +113,29 @@ Set-Location C:\dev\rainbow-statusline
 
 Expected log lines: `run=1 ms=... err=none out=probe-ok`. An `err=` other than `none` is the answer to the question.
 
-Send back: flash yes or no, the log lines, and whether the `probe #N` line appeared at all.
+Part C, a project folder must not supply the binary. Run this with `rainbow-statusline` not on `PATH`, and do not send any prompt.
+
+```
+$p = "$env:TEMP\oc-project-check"
+New-Item -ItemType Directory -Force "$p\project", "$p\config\opencode", "$p\state" | Out-Null
+go build -o "$p\project\rainbow-statusline.exe" .\cmd\rainbow-statusline
+$url = ([Uri](Resolve-Path plugin\opencode\tui.tsx).Path).AbsoluteUri
+Set-Content -Encoding ascii "$p\config\opencode\tui.json" ('{"plugin":["' + $url + '"]}')
+$env:XDG_CONFIG_HOME = "$p\config"; $env:XDG_STATE_HOME = "$p\state"
+Remove-Item Env:RAINBOW_STATUSLINE_BIN -ErrorAction SilentlyContinue
+Set-Location "$p\project"
+opencode
+```
+
+Watch for about 20 seconds. Expected: no status bar at the bottom, because the only binary is the project's. A bar with `[RTK` in it means the project's `.exe` was started, which is a security bug. Quit with `Ctrl+C` or `/exit`, then:
+
+```
+Remove-Item Env:XDG_CONFIG_HOME, Env:XDG_STATE_HOME
+Set-Location C:\dev\rainbow-statusline
+Remove-Item -Recurse -Force "$env:TEMP\oc-project-check"
+```
+
+Send back: flash yes or no, the log lines, whether the `probe #N` line appeared at all, and whether Part C drew a bar.
 
 ## Stage 4: Copilot CLI (Windows and the Copilot account)
 

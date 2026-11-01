@@ -47,8 +47,8 @@ func (p ponytail) Badge(s model.Session) (render.Badge, bool) {
 		}
 	}
 	line, _, _ := strings.Cut(raw, "\n")
-	mode := strings.Join(strings.Fields(line), "")
-	if mode == "off" || !plainMode(mode) {
+	mode := strings.ToLower(strings.Join(strings.Fields(line), ""))
+	if mode == "off" || (mode != "" && !modePattern.MatchString(mode)) {
 		return render.Badge{}, false
 	}
 	label := "[PONYTAIL]"
@@ -56,16 +56,4 @@ func (p ponytail) Badge(s model.Session) (render.Badge, bool) {
 		label = "[PONYTAIL:" + strings.ToUpper(mode) + "]"
 	}
 	return render.Badge{Name: "PONYTAIL", Lines: []render.Segment{{Text: label, FG: ponytailColour}}}, true
-}
-
-// plainMode accepts letters, digits, "-" and "_": a mode word, never markup.
-func plainMode(s string) bool {
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
-		default:
-			return false
-		}
-	}
-	return true
 }

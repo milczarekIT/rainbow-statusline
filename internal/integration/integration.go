@@ -67,6 +67,8 @@ var (
 	homeDir  = os.UserHomeDir
 
 	sessionIDPattern = regexp.MustCompile(`^[0-9A-Za-z_-]+$`)
+	// modePattern is any mode word, so a future upstream mode keeps its badge.
+	modePattern = regexp.MustCompile(`^[a-z0-9-]{1,16}$`)
 )
 
 // RegisterCaches teaches the cache how to compute every key this package reads.

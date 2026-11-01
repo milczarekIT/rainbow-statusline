@@ -61,6 +61,8 @@ func TestCavemanNotFull(t *testing.T) {
 		"lite":        "[CAVEMAN:LITE]",
 		"wenyan-lite": "[CAVEMAN:WENYAN-LITE]",
 		"Lite\n":      "[CAVEMAN:LITE]",
+		"bogus":       "[CAVEMAN:BOGUS]", // a future upstream mode keeps its badge
+		"future-m0de": "[CAVEMAN:FUTURE-M0DE]",
 	} {
 		e := cavemanSetup(t, flag)
 		e.canned[keyCaveTotal] = "84100"
@@ -125,8 +127,8 @@ func TestCavemanHidden(t *testing.T) {
 			t.Fatalf("off shows %q", text(b))
 		}
 	})
-	t.Run("unknown mode", func(t *testing.T) {
-		for _, f := range []string{"bogus", "\x1b]8;;x\x07full", "ful\x1b[31ml"} {
+	t.Run("not a mode word", func(t *testing.T) {
+		for _, f := range []string{"\x1b]8;;x\x07full", "ful\x1b[31ml", "<x>", "a_b", "a.b", "full x", "ül"} {
 			cavemanSetup(t, f)
 			if b, ok := caveBadge(i64(1)); ok {
 				t.Errorf("flag %q rendered %q", f, text(b))

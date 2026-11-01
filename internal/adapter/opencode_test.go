@@ -79,7 +79,7 @@ func TestOpenCodeFullSessionMatchesThePlugin(t *testing.T) {
 	if len(s.BashRuns) != 1 || s.BashRuns[0] != (model.BashRun{Cmd: "rtk git status", Start: 1793565479100, End: 1793565479200}) {
 		t.Errorf("bash: %+v", s.BashRuns)
 	}
-	want := "@:/w\nbig-pickle (high) │ ctx ▰▰▰▰▱▱▱▱ 103.4k / 200k (51.7%) · Σout 252 │ session ~$0.75 ‖ ⚡ read 1.8k · write 3k · ⏱ ~4:00 ~5m\n"
+	want := "@:/w\nbig-pickle (high) │ ctx ▰▰▰▰▱▱▱▱ 103.4k / 200k (51.7%) · Σout 252 │ session ~$0.75 ‖ ⚡ read 1.8k · write 3k · ⏱ ~4:00\n"
 	if got := drawn(s); got != want {
 		t.Errorf("\ngot  %q\nwant %q", got, want)
 	}
@@ -92,12 +92,12 @@ func TestOpenCodeExpiredAndRunning(t *testing.T) {
 	if s.CacheExpiresAt == nil || !s.CacheEstimated {
 		t.Fatalf("expiry: %+v", s)
 	}
-	if !contains(drawn(s), "✖ expired") {
+	if !strings.HasSuffix(drawn(s), "✖ expired\n") {
 		t.Errorf("expired: %s", drawn(s))
 	}
 	// A reply still streaming has no completion time, so the timer is unknown.
 	s = Parse("opencode", []byte(`{"sessionID":"ses_a","messages":[{"tokens":{"input":1,"output":0,"reasoning":0,"cache":{"read":2,"write":3}},"cost":0}]}`))
-	if got := drawn(s); !contains(got, "read 2 · write 3 · ⏱ —") {
+	if got := drawn(s); !strings.HasSuffix(got, "read 2 · write 3 · ⏱ —\n") {
 		t.Errorf("running: %s", got)
 	}
 }

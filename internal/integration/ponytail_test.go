@@ -51,6 +51,7 @@ func TestPonytailBadge(t *testing.T) {
 		"Ultra\r\n":    "[PONYTAIL:ULTRA]",
 		" li te \n":    "[PONYTAIL:LITE]", // whitespace is dropped, like tr -d '[:space:]'
 		"lite\nfull\n": "[PONYTAIL:LITE]", // first line only
+		"future-m0de":  "[PONYTAIL:FUTURE-M0DE]",
 	} {
 		e := ponytailSetup(t, "x")
 		write(t, filepath.Join(e.dir, ".ponytail-active"), flag)
@@ -113,7 +114,7 @@ func TestPonytailHidden(t *testing.T) {
 }
 
 func TestPonytailUnknownModeNeverReachesTheBar(t *testing.T) {
-	for _, flag := range []string{"\x1b]8;;http://x\x07full", "li\x1b[31mte", "lite;rm", "ül", "a.b", "<b>"} {
+	for _, flag := range []string{"\x1b]8;;http://x\x07full", "li\x1b[31mte", "lite;rm", "ül", "a.b", "<b>", "a_b"} {
 		ponytailSetup(t, flag)
 		if got, ok, _ := ponyBadge(t); ok {
 			t.Errorf("flag %q rendered %q", flag, got)

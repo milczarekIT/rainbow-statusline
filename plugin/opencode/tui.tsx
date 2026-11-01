@@ -5,10 +5,14 @@ import type { TuiPlugin, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import type { AssistantMessage } from "@opencode-ai/sdk/v2"
 import { createSignal, For } from "solid-js"
 import { execFile } from "node:child_process"
+import { homedir } from "node:os"
+import { isAbsolute } from "node:path"
 
 type Segment = { text: string; fg: string; bold: boolean; dim: boolean }
 
-const BIN = process.env.RAINBOW_STATUSLINE_BIN || "rainbow-statusline"
+// A relative path, or running from the project folder, could start a binary the project supplies.
+const ENV_BIN = process.env.RAINBOW_STATUSLINE_BIN
+const BIN = ENV_BIN && isAbsolute(ENV_BIN) ? ENV_BIN : "rainbow-statusline"
 const INTERVAL_MS = 1000
 const LIMIT_MS = 2000
 const DIM = "#6c6c6c"
@@ -26,6 +30,10 @@ function colour(fg: string): string | undefined {
   return `#${hex(level(Math.floor(c / 36)))}${hex(level(Math.floor(c / 6) % 6))}${hex(level(c % 6))}`
 }
 
+const valid = (v: any): v is Segment[][] =>
+  Array.isArray(v) &&
+  v.every((l) => Array.isArray(l) && l.every((s) => s !== null && typeof s === "object" && typeof s.text === "string"))
+
 const tui: TuiPlugin = async (api) => {
   const [lines, setLines] = createSignal<Segment[][]>([])
 
@@ -41,8 +49,10 @@ const tui: TuiPlugin = async (api) => {
     const bash: { cmd: string; start: number; end: number }[] = []
     for (const m of assistant)
       for (const p of api.state.part(m.id))
-        if (p.type === "tool" && p.tool === "bash" && p.state.status === "completed")
-          bash.push({ cmd: String(p.state.input.command ?? ""), start: p.state.time.start, end: p.state.time.end })
+        if (p.type === "tool" && p.tool === "bash" && p.state.status === "completed") {
+          const cmd = String(p.state.input.command ?? "")
+          if (cmd.includes("rtk")) bash.push({ cmd, start: p.state.time.start, end: p.state.time.end })
+        }
     return {
       sessionID,
       cwd: api.state.path.directory,
@@ -56,6 +66,7 @@ const tui: TuiPlugin = async (api) => {
   }
 
   let running = false
+  let drawn = ""
   const refresh = () => {
     if (running) return
     running = true
@@ -63,12 +74,15 @@ const tui: TuiPlugin = async (api) => {
       const payload = JSON.stringify(collect())
       const args = ["--agent", "opencode", "--format", "json"]
       if (api.renderer.width > 1) args.push("--width", String(api.renderer.width - 1))
-      const child = execFile(BIN, args, { timeout: LIMIT_MS, windowsHide: true }, (err, out) => {
+      const child = execFile(BIN, args, { cwd: homedir(), timeout: LIMIT_MS, windowsHide: true }, (err, out) => {
         running = false
-        if (err) return
+        if (err || out === drawn) return
         try {
           const parsed = JSON.parse(out)
-          if (Array.isArray(parsed) && parsed.every(Array.isArray)) setLines(parsed)
+          if (valid(parsed)) {
+            drawn = out
+            setLines(parsed)
+          }
         } catch {}
       })
       // A missing binary closes stdin at once; unhandled, that error would take the TUI down.
