@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/milczarekIT/rainbow-statusline/internal/adapter"
+	"github.com/milczarekIT/rainbow-statusline/internal/cache"
 	"github.com/milczarekIT/rainbow-statusline/internal/config"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 	"github.com/milczarekIT/rainbow-statusline/internal/render"
@@ -19,6 +20,11 @@ import (
 func main() {
 	// Drawing never crashes and never shows an error on the assistant's screen.
 	defer func() { _ = recover() }()
+
+	if len(os.Args) == 3 && os.Args[1] == "refresh" {
+		_ = cache.Refresh(os.Args[2])
+		return
+	}
 
 	flags := flag.NewFlagSet("rainbow-statusline", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
