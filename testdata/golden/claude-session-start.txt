@@ -1,0 +1,2 @@
+[32muser@host[0m:[34mredacted[0m
+[1;38;5;208mHaiku 5.5[0m [2m([0m[38;5;114mmedium[0m[2m)[0m[2m │ [0mctx [2m—[0m[2m │ [0m[2msession ~[0m[38;5;220m$0.00[0m[38;5;240m ‖ [0m[2mcache —[0m
