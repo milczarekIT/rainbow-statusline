@@ -49,25 +49,22 @@ var effortColours = map[string]Segment{
 
 // Draw lays out the status line. A width of 0 or less means no limit.
 func Draw(s model.Session, badges []Badge, cfg config.View, width int) []Line {
-	lines := []Line{{
-		{Text: s.User + "@" + s.Host, FG: green},
-		{Text: ":"},
-		{Text: s.Cwd, FG: "34"},
-	}}
-	if len(badges) > 0 {
-		var row Line
-		for i, b := range badges {
-			if i > 0 {
-				row = append(row, Segment{Text: " "})
-			}
-			row = append(row, b.Lines...)
+	minimal := cfg.Density == "minimal"
+	var lines []Line
+	if cfg.Density != "compact" && !minimal {
+		lines = append(lines, Line{
+			{Text: s.User + "@" + s.Host, FG: green},
+			{Text: ":"},
+			{Text: s.Cwd, FG: "34"},
+		})
+		if row := badgeRow(badges, cfg); len(row) > 0 {
+			lines = append(lines, row)
 		}
-		lines = append(lines, row)
 	}
-	stats := statsLine(s, 0)
+	stats := statsLine(s, 0, cfg)
 	if width > 0 {
 		for stage := 1; stage <= maxStage && lineCells(stats) > width; stage++ {
-			stats = statsLine(s, stage)
+			stats = statsLine(s, stage, cfg)
 		}
 		for i, l := range lines {
 			lines[i] = fit(l, width)
@@ -79,6 +76,38 @@ func Draw(s model.Session, badges []Badge, cfg config.View, width int) []Line {
 		lines[i] = sanitize(l)
 	}
 	return lines
+}
+
+// badgeRow joins the badges the view shows, those named in cfg.Order first.
+func badgeRow(badges []Badge, cfg config.View) Line {
+	var shown []Badge
+	used := make([]bool, len(badges))
+	take := func(i int) {
+		used[i] = true
+		if cfg.Shows(strings.ToLower(badges[i].Name)) {
+			shown = append(shown, badges[i])
+		}
+	}
+	for _, id := range cfg.Order {
+		for i, b := range badges {
+			if !used[i] && strings.EqualFold(b.Name, id) {
+				take(i)
+			}
+		}
+	}
+	for i := range badges {
+		if !used[i] {
+			take(i)
+		}
+	}
+	var row Line
+	for i, b := range shown {
+		if i > 0 {
+			row = append(row, Segment{Text: " "})
+		}
+		row = append(row, b.Lines...)
+	}
+	return row
 }
 
 // sanitize is the only gate between outside text and the terminal: a control
@@ -102,20 +131,42 @@ func sanitize(l Line) Line {
 // 2 also Σout, 3 also the "/ size (pct)" part.
 const maxStage = 3
 
-func statsLine(s model.Session, stage int) Line {
-	sep := Segment{Text: " │ ", Dim: true}
-	l := modelSegments(s)
-	l = append(l, sep)
-	l = append(l, contextSegments(s, stage >= 3)...)
-	if s.OutTokens != nil && stage < 2 {
-		l = append(l,
-			Segment{Text: " · ", Dim: true},
-			Segment{Text: "Σout ", Dim: true},
-			Segment{Text: k(*s.OutTokens), FG: "38;5;114", Bold: true})
+func statsLine(s model.Session, stage int, cfg config.View) Line {
+	minimal := cfg.Density == "minimal"
+	show := func(id string) bool {
+		if minimal && id != config.Model && id != config.Context && id != config.Cost {
+			return false
+		}
+		return cfg.Shows(id)
 	}
-	l = append(l, sep, Segment{Text: "session ~", Dim: true}, Segment{Text: cost(s.CostUSD), FG: "38;5;220"})
-	l = append(l, Segment{Text: " ‖ ", FG: "38;5;240"})
-	return append(l, cacheSegments(s, stage >= 1)...)
+	sep := Segment{Text: " │ ", Dim: true}
+	var l Line
+	add := func(connector Segment, part Line) {
+		if len(l) > 0 {
+			l = append(l, connector)
+		}
+		l = append(l, part...)
+	}
+	if show(config.Model) {
+		add(sep, modelSegments(s))
+	}
+	if show(config.Context) {
+		add(sep, contextSegments(s, stage >= 3))
+	}
+	if show(config.Output) && s.OutTokens != nil && stage < 2 {
+		connector := sep
+		if show(config.Context) {
+			connector = Segment{Text: " · ", Dim: true}
+		}
+		add(connector, Line{{Text: "Σout ", Dim: true}, {Text: k(*s.OutTokens), FG: "38;5;114", Bold: true}})
+	}
+	if show(config.Cost) {
+		add(sep, Line{{Text: "session ~", Dim: true}, {Text: cost(s.CostUSD), FG: "38;5;220"}})
+	}
+	if show(config.Cache) {
+		add(Segment{Text: " ‖ ", FG: "38;5;240"}, cacheSegments(s, stage >= 1))
+	}
+	return l
 }
 
 func modelSegments(s model.Session) Line {

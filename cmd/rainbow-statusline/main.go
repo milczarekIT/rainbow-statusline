@@ -56,7 +56,8 @@ func main() {
 		}
 	}
 	width := resolveWidth(*widthFlag, os.Getenv("COLUMNS"), stderrWidth, controllingTerminalWidth)
-	lines := render.Draw(s, badges, config.View{}, width)
+	cfg, _ := config.Load()
+	lines := render.Draw(s, badges, cfg.View, width)
 	if *outFormat == "json" {
 		_, _ = os.Stdout.Write(render.JSON(lines))
 		return

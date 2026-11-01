@@ -2,6 +2,7 @@ package render
 
 import (
 	"encoding/json"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -132,7 +133,7 @@ func TestTrimOrder(t *testing.T) {
 		{stage: 3, drop: []string{"read", "Σout", "/ 1000k"}, keep: []string{"95.3k", "⏱ 30:00"}},
 	}
 	for _, c := range cases {
-		got := text(statsLine(fullSession(), c.stage))
+		got := text(statsLine(fullSession(), c.stage, config.View{}))
 		for _, d := range c.drop {
 			if strings.Contains(got, d) {
 				t.Errorf("%q must be dropped from %q", d, got)
@@ -345,5 +346,61 @@ func TestCacheState(t *testing.T) {
 	}
 	if got := last(Draw(model.Session{CacheRead: ptr[int64](5)}, nil, config.View{}, 0)); !strings.Contains(got, "cache —") {
 		t.Errorf("no cache data: got %q", got)
+	}
+}
+
+func TestDensityCompactDropsFirstLine(t *testing.T) {
+	lines := Draw(fullSession(), nil, config.View{Density: "compact"}, 0)
+	if len(lines) != 1 || !strings.Contains(text(lines[0]), "Haiku 5.5") {
+		t.Errorf("want only the stats line, got %v", lines)
+	}
+}
+
+func TestDensityMinimal(t *testing.T) {
+	badges := []Badge{{Name: "RTK", Lines: []Segment{{Text: "[RTK]"}}}}
+	lines := Draw(fullSession(), badges, config.View{Density: "minimal"}, 0)
+	if len(lines) != 1 {
+		t.Fatalf("want one line, got %d", len(lines))
+	}
+	got := text(lines[0])
+	for _, want := range []string{"Haiku 5.5", "ctx", "$0.01"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %q", want, got)
+		}
+	}
+	for _, not := range []string{"Σout", "cache", "⚡", "RTK", "user@host"} {
+		if strings.Contains(got, not) {
+			t.Errorf("unexpected %q in %q", not, got)
+		}
+	}
+}
+
+func TestUnknownDensityDrawsFull(t *testing.T) {
+	a := Draw(fullSession(), nil, config.View{Density: "wat"}, 0)
+	b := Draw(fullSession(), nil, config.View{}, 0)
+	if !reflect.DeepEqual(a, b) {
+		t.Error("unknown density must draw like the default")
+	}
+}
+
+func TestHiddenBadgeAndOrder(t *testing.T) {
+	badges := []Badge{
+		{Name: "RTK", Lines: []Segment{{Text: "[RTK]"}}},
+		{Name: "CLAUDE-MEM", Lines: []Segment{{Text: "[MEM]"}}},
+		{Name: "CAVEMAN", Lines: []Segment{{Text: "[CAVE]"}}},
+	}
+	lines := Draw(fullSession(), badges, config.View{Hidden: []string{"rtk"}, Order: []string{"caveman"}}, 0)
+	if got := text(lines[1]); got != "[CAVE] [MEM]" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestHiddenSessionItems(t *testing.T) {
+	got := last(Draw(fullSession(), nil, config.View{Hidden: []string{"model", "output", "cache"}}, 0))
+	if strings.Contains(got, "Haiku") || strings.Contains(got, "Σout") || strings.Contains(got, "⚡") {
+		t.Errorf("hidden items drawn: %q", got)
+	}
+	if !strings.HasPrefix(got, "ctx") || !strings.Contains(got, "session ~$0.01") {
+		t.Errorf("got %q", got)
 	}
 }
