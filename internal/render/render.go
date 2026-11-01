@@ -4,6 +4,7 @@ package render
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -87,8 +88,8 @@ func badgeRow(badges []Badge, cfg config.View) Line {
 	used := make([]bool, len(badges))
 	take := func(i int) {
 		used[i] = true
-		if cfg.Shows(strings.ToLower(badges[i].Name)) {
-			shown = append(shown, badges[i])
+		if id := strings.ToLower(badges[i].Name); cfg.Shows(id) {
+			shown = append(shown, withVariant(badges[i], cfg.Variants[id]))
 		}
 	}
 	for _, id := range cfg.Order {
@@ -111,6 +112,30 @@ func badgeRow(badges []Badge, cfg config.View) Line {
 		row = append(row, b.Lines...)
 	}
 	return row
+}
+
+// pairPattern is a badge's "(c: … | t: …)" text, with or without a leading space.
+var pairPattern = regexp.MustCompile(`^( ?)\(c: (.*) \| t: (.*)\)$`)
+
+// withVariant keeps only the session ("c") or the total ("t") figure of a
+// badge that has both. Any other variant, or a badge without the pair, is unchanged.
+func withVariant(b Badge, variant string) Badge {
+	if variant != "c" && variant != "t" {
+		return b
+	}
+	lines := make([]Segment, len(b.Lines))
+	copy(lines, b.Lines)
+	for i, seg := range lines {
+		if m := pairPattern.FindStringSubmatch(seg.Text); m != nil {
+			if variant == "c" {
+				lines[i].Text = m[1] + "(c: " + m[2] + ")"
+			} else {
+				lines[i].Text = m[1] + "(t: " + m[3] + ")"
+			}
+		}
+	}
+	b.Lines = lines
+	return b
 }
 
 // sanitize is the only gate between outside text and the terminal: a control
@@ -154,7 +179,11 @@ func statsLine(s model.Session, stage int, cfg config.View) Line {
 		add(sep, modelSegments(s))
 	}
 	if show(config.Context) {
-		add(sep, contextSegments(s, stage >= 3))
+		ctx := contextSegments(s, stage >= 3)
+		if cfg.Variants[config.Context] == "pct" {
+			ctx = contextPctOnly(s)
+		}
+		add(sep, ctx)
 	}
 	if show(config.Output) && s.OutTokens != nil && stage < 2 {
 		connector := sep
@@ -167,7 +196,7 @@ func statsLine(s model.Session, stage int, cfg config.View) Line {
 		add(sep, Line{{Text: "session ~", Dim: true}, {Text: cost(s.CostUSD), FG: "38;5;220"}})
 	}
 	if show(config.Cache) {
-		add(Segment{Text: " ‖ ", FG: "38;5;240"}, cacheSegments(s, stage >= 1))
+		add(Segment{Text: " ‖ ", FG: "38;5;240"}, cacheSegments(s, stage >= 1 || cfg.Variants[config.Cache] == "timer"))
 	}
 	return l
 }
@@ -233,6 +262,16 @@ func contextPct(s model.Session) (float64, bool) {
 	}
 	_, ok := format.Pct(pct, 100, 1)
 	return pct, ok
+}
+
+// contextPctOnly is the "pct" variant: the colour and figure without bar or sizes.
+func contextPctOnly(s model.Session) Line {
+	l := contextSegments(s, false)
+	pct, ok := contextPct(s)
+	if !ok {
+		return l
+	}
+	return Line{{Text: "ctx", Dim: true}, {Text: " "}, {Text: fixed(pct, 1) + "%", FG: l[2].FG}}
 }
 
 func bar(pct float64, w int) string {

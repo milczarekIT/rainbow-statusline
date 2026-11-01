@@ -16,6 +16,7 @@ import (
 	"github.com/milczarekIT/rainbow-statusline/internal/integration"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 	"github.com/milczarekIT/rainbow-statusline/internal/render"
+	"github.com/milczarekIT/rainbow-statusline/internal/tui"
 	"golang.org/x/term"
 )
 
@@ -40,7 +41,16 @@ func main() {
 	outFormat := flags.String("format", "ansi", "ansi, or json for hosts that draw the segments themselves")
 	_ = flags.Parse(os.Args[1:])
 
-	if info, err := os.Stdin.Stat(); err != nil || info.Mode()&os.ModeCharDevice != 0 {
+	if info, err := os.Stdin.Stat(); err != nil {
+		return
+	} else if info.Mode()&os.ModeCharDevice != 0 {
+		// A person at a terminal, not an assistant: open the configuration screen.
+		// Without a config file the defaults will do until the first-run guide exists.
+		cfg, _ := config.Load()
+		if err := tui.RunScreen(cfg); err != nil {
+			fmt.Fprintln(os.Stderr, "rainbow-statusline:", err)
+			os.Exit(1)
+		}
 		return
 	}
 	stdin, _ := io.ReadAll(os.Stdin)

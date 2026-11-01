@@ -415,3 +415,64 @@ func TestHiddenSessionItems(t *testing.T) {
 		t.Errorf("got %q", got)
 	}
 }
+
+func pairBadge(name string) Badge {
+	return Badge{Name: name, Lines: []Segment{{Text: "[" + name + "]", FG: "35"}, {Text: " (c: 1.1k | t: 38.3M)"}}}
+}
+
+func TestBadgeVariants(t *testing.T) {
+	cases := []struct{ variant, want string }{
+		{"", "[RTK] (c: 1.1k | t: 38.3M)"},
+		{"c+t", "[RTK] (c: 1.1k | t: 38.3M)"},
+		{"c", "[RTK] (c: 1.1k)"},
+		{"t", "[RTK] (t: 38.3M)"},
+		{"bogus", "[RTK] (c: 1.1k | t: 38.3M)"},
+	}
+	for _, c := range cases {
+		v := config.View{Variants: map[string]string{"rtk": c.variant}}
+		lines := Draw(model.Session{}, []Badge{pairBadge("RTK")}, v, 0)
+		if got := text(lines[1]); got != c.want {
+			t.Errorf("variant %q: got %q, want %q", c.variant, got, c.want)
+		}
+	}
+}
+
+func TestBadgeVariantKeepsSeparateSpace(t *testing.T) {
+	b := Badge{Name: "CAVEMAN", Lines: []Segment{{Text: "[CAVEMAN]"}, {Text: " "}, {Text: "(c: ~1k | t: ~2M)"}}}
+	lines := Draw(model.Session{}, []Badge{b}, config.View{Variants: map[string]string{"caveman": "t"}}, 0)
+	if got := text(lines[1]); got != "[CAVEMAN] (t: ~2M)" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestBadgeVariantLeavesBadgesWithoutPair(t *testing.T) {
+	off := Badge{Name: "RTK", Lines: []Segment{{Text: "[RTK off]"}}}
+	lines := Draw(model.Session{}, []Badge{off}, config.View{Variants: map[string]string{"rtk": "c"}}, 0)
+	if got := text(lines[1]); got != "[RTK off]" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestContextVariants(t *testing.T) {
+	s := model.Session{ContextUsed: ptr[int64](118100), ContextSize: ptr[int64](200000)}
+	v := config.View{Variants: map[string]string{"context": "pct"}}
+	if got := last(Draw(s, nil, v, 0)); !strings.Contains(got, "ctx 59.1%") || strings.ContainsAny(got, "▰▱") {
+		t.Errorf("pct: got %q", got)
+	}
+	if got := last(Draw(s, nil, config.View{Variants: map[string]string{"context": "bar+pct"}}, 0)); !strings.Contains(got, "▰") {
+		t.Errorf("bar+pct: got %q", got)
+	}
+}
+
+func TestCacheVariantTimer(t *testing.T) {
+	freeze(t)
+	s := fullSession()
+	v := config.View{Variants: map[string]string{"cache": "timer"}}
+	got := last(Draw(s, nil, v, 0))
+	if strings.Contains(got, "read") || !strings.Contains(got, "⏱ 30:00") {
+		t.Errorf("got %q", got)
+	}
+	if def := last(Draw(s, nil, config.View{Variants: map[string]string{"cache": "full"}}, 0)); !strings.Contains(def, "read") {
+		t.Errorf("full: got %q", def)
+	}
+}
