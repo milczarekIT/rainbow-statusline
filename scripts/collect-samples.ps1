@@ -106,7 +106,10 @@ function OpenCodeStage {
     if ($id) {
       $sid = ($id.Matches[0].Value)
       $p = Join-Path $Raw 'opencode-export.json'
-      cmd /c "opencode export $sid > ""$p"""   # cmd keeps the bytes as they are
+      [IO.File]::WriteAllText($p, ((& opencode export $sid) -join "`n"), $Utf8)
+      if (-not (Test-Path -LiteralPath $p) -or (Get-Item -LiteralPath $p).Length -eq 0) {
+        "opencode export produced no output for session $sid; the OpenCode sample is missing"
+      }
     }
     if (Have sqlite3) { & sqlite3 "$x\data\opencode\opencode.db" '.schema session' | Out-File -Encoding utf8 (Join-Path $Raw 'opencode-session-schema.sql') }
   } finally {

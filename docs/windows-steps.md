@@ -4,7 +4,7 @@ Goal: answer the open questions in `docs/discovery.md` and collect real samples 
 
 All commands are PowerShell (Windows PowerShell 5.1 or PowerShell 7) unless stated. Use Windows Terminal.
 
-## Stage 0: get the repo and Go
+## Stage 0: prerequisites, repo and Go
 
 Working directory: any folder for code, e.g. `C:\dev`.
 
@@ -14,13 +14,22 @@ On the Mac first, so the branch exists on GitHub (the agent never pushes):
 git -C ~/dev/rainbow-statusline push -u origin feat/v1
 ```
 
-On Windows:
+On Windows, install what the stages need (Git for the clone, GitHub CLI for the private repo, Go for the scrubber; `winget` ships with current Windows 10/11):
 
 ```
+winget install --id Git.Git -e
+winget install --id GitHub.cli -e
 winget install --id GoLang.Go -e
 ```
 
-Open a new terminal so `go` is on PATH, then:
+Open a new terminal so `git`, `gh` and `go` are on PATH, then sign in to GitHub (choose GitHub.com, HTTPS, and log in with the browser):
+
+```
+gh auth login
+gh auth status
+```
+
+Expected: `Logged in to github.com account milczarekIT`. Then:
 
 ```
 cd C:\dev
@@ -50,6 +59,8 @@ If a tool you use is `missing` at the expected place, find the real place and wr
 Get-ChildItem -Recurse -Filter history.db $env:LOCALAPPDATA, $env:APPDATA, $HOME -ErrorAction SilentlyContinue | Select-Object -First 5 FullName
 Get-ChildItem -Recurse -Filter claude-mem.db $HOME -ErrorAction SilentlyContinue | Select-Object -First 5 FullName
 ```
+
+`info.txt` contains your full user paths: send it to the agent only, never paste it into the repo.
 
 Send back: `C:\dev\rs-collected\info.txt` plus the output of those two commands if anything was missing.
 
