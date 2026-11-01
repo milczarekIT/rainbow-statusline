@@ -1,0 +1,151 @@
+{
+  "info": {
+    "agent": "build",
+    "cost": 0,
+    "directory": "redacted",
+    "id": "redacted",
+    "model": {
+      "id": "big-pickle",
+      "providerID": "opencode",
+      "variant": "default"
+    },
+    "path": "redacted",
+    "permission": [
+      {
+        "action": "redacted",
+        "pattern": "redacted",
+        "permission": "redacted"
+      },
+      {
+        "action": "redacted",
+        "pattern": "redacted",
+        "permission": "redacted"
+      },
+      {
+        "action": "redacted",
+        "pattern": "redacted",
+        "permission": "redacted"
+      }
+    ],
+    "projectID": "redacted",
+    "slug": "redacted",
+    "summary": {
+      "additions": 0,
+      "deletions": 0,
+      "files": 0
+    },
+    "time": {
+      "created": 1793565479600,
+      "updated": 1793565489971
+    },
+    "title": "redacted",
+    "tokens": {
+      "cache": {
+        "read": 1792,
+        "write": 0
+      },
+      "input": 98623,
+      "output": 2,
+      "reasoning": 0
+    },
+    "version": "1.19.5"
+  },
+  "messages": [
+    {
+      "info": {
+        "agent": "build",
+        "id": "redacted",
+        "model": {
+          "modelID": "big-pickle",
+          "providerID": "opencode"
+        },
+        "role": "user",
+        "sessionID": "redacted",
+        "summary": {
+          "diffs": []
+        },
+        "time": {
+          "created": 1793565480501
+        }
+      },
+      "parts": [
+        {
+          "id": "redacted",
+          "messageID": "redacted",
+          "sessionID": "redacted",
+          "text": "redacted",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "info": {
+        "agent": "build",
+        "cost": 0,
+        "finish": "stop",
+        "id": "redacted",
+        "mode": "build",
+        "modelID": "big-pickle",
+        "parentID": "redacted",
+        "path": {
+          "cwd": "redacted",
+          "root": "redacted"
+        },
+        "providerID": "opencode",
+        "role": "assistant",
+        "sessionID": "redacted",
+        "time": {
+          "completed": 1793565489939,
+          "created": 1793565481871
+        },
+        "tokens": {
+          "cache": {
+            "read": 1792,
+            "write": 0
+          },
+          "input": 98623,
+          "output": 2,
+          "reasoning": 0,
+          "total": 100417
+        }
+      },
+      "parts": [
+        {
+          "id": "redacted",
+          "messageID": "redacted",
+          "sessionID": "redacted",
+          "type": "step-start"
+        },
+        {
+          "id": "redacted",
+          "messageID": "redacted",
+          "sessionID": "redacted",
+          "text": "redacted",
+          "time": {
+            "end": 1793565489930,
+            "start": 1793565489929
+          },
+          "type": "text"
+        },
+        {
+          "cost": 0,
+          "id": "redacted",
+          "messageID": "redacted",
+          "reason": "redacted",
+          "sessionID": "redacted",
+          "tokens": {
+            "cache": {
+              "read": 1792,
+              "write": 0
+            },
+            "input": 98623,
+            "output": 2,
+            "reasoning": 0,
+            "total": 100417
+          },
+          "type": "step-finish"
+        }
+      ]
+    }
+  ]
+}

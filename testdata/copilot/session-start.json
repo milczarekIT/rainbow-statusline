@@ -1,0 +1,49 @@
+{
+  "ai_used": {
+    "formatted": "redacted",
+    "total_nano_aiu": 0
+  },
+  "allow_all_enabled": false,
+  "context_window": {
+    "context_window_size": null,
+    "current_context_tokens": 0,
+    "current_context_used_percentage": 0,
+    "displayed_context_limit": 200000,
+    "last_call_input_tokens": 0,
+    "last_call_output_tokens": 0,
+    "remaining_percentage": null,
+    "remaining_tokens": null,
+    "total_cache_read_tokens": 0,
+    "total_cache_write_tokens": 0,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_reasoning_tokens": 0,
+    "total_tokens": 0,
+    "used_percentage": null
+  },
+  "cost": {
+    "total_api_duration_ms": 0,
+    "total_duration_ms": 276,
+    "total_lines_added": 0,
+    "total_lines_removed": 0,
+    "total_premium_requests": 0
+  },
+  "cwd": "redacted",
+  "model": {
+    "auto_tier": null,
+    "display_name": "Copilot Fusion",
+    "id": "auto",
+    "pending_auto_tier": null
+  },
+  "remote": {
+    "connected": false
+  },
+  "session_id": "redacted",
+  "session_name": null,
+  "transcript_path": "redacted",
+  "username": null,
+  "version": "1.0.105",
+  "workspace": {
+    "current_dir": "redacted"
+  }
+}

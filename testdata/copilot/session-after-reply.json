@@ -1,0 +1,49 @@
+{
+  "ai_used": {
+    "formatted": "redacted",
+    "total_nano_aiu": 755080000
+  },
+  "allow_all_enabled": false,
+  "context_window": {
+    "context_window_size": null,
+    "current_context_tokens": 40708,
+    "current_context_used_percentage": 20,
+    "displayed_context_limit": 200000,
+    "last_call_input_tokens": 38876,
+    "last_call_output_tokens": 5,
+    "remaining_percentage": null,
+    "remaining_tokens": null,
+    "total_cache_read_tokens": 1280,
+    "total_cache_write_tokens": 0,
+    "total_input_tokens": 38876,
+    "total_output_tokens": 5,
+    "total_reasoning_tokens": 0,
+    "total_tokens": 38881,
+    "used_percentage": null
+  },
+  "cost": {
+    "total_api_duration_ms": 3569,
+    "total_duration_ms": 46892,
+    "total_lines_added": 0,
+    "total_lines_removed": 0,
+    "total_premium_requests": 1
+  },
+  "cwd": "redacted",
+  "model": {
+    "auto_tier": null,
+    "display_name": "Copilot Fusion → mai-code-1.1-flash",
+    "id": "auto",
+    "pending_auto_tier": null
+  },
+  "remote": {
+    "connected": false
+  },
+  "session_id": "redacted",
+  "session_name": "redacted",
+  "transcript_path": "redacted",
+  "username": null,
+  "version": "1.0.105",
+  "workspace": {
+    "current_dir": "redacted"
+  }
+}

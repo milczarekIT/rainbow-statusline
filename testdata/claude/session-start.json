@@ -1,0 +1,58 @@
+{
+  "context_window": {
+    "context_window_size": 1000000,
+    "current_usage": null,
+    "remaining_percentage": null,
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "used_percentage": null
+  },
+  "cost": {
+    "total_api_duration_ms": 0,
+    "total_cost_usd": 0,
+    "total_duration_ms": 6530,
+    "total_lines_added": 0,
+    "total_lines_removed": 0
+  },
+  "cwd": "redacted",
+  "effort": {
+    "level": "medium"
+  },
+  "exceeds_200k_tokens": false,
+  "fast_mode": false,
+  "model": {
+    "display_name": "Haiku 5.5",
+    "id": "claude-haiku-5-5"
+  },
+  "output_style": {
+    "name": "default"
+  },
+  "rate_limits": {
+    "five_hour": {
+      "resets_at": 1793568000,
+      "used_percentage": 16
+    },
+    "seven_day": {
+      "resets_at": 1793642400,
+      "used_percentage": 57
+    }
+  },
+  "scratchpad_dir": "redacted",
+  "session_id": "redacted",
+  "thinking": {
+    "enabled": true
+  },
+  "transcript_path": "redacted",
+  "version": "2.1.316",
+  "workspace": {
+    "added_dirs": [],
+    "current_dir": "redacted",
+    "git_worktree": "redacted",
+    "project_dir": "redacted",
+    "repo": {
+      "host": "redacted",
+      "name": "redacted",
+      "owner": "redacted"
+    }
+  }
+}
