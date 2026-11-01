@@ -1,0 +1,66 @@
+version: 2
+project_name: rainbow-statusline
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: rainbow-statusline
+    main: ./cmd/rainbow-statusline
+    binary: rainbow-statusline
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: ["-s -w"]
+
+archives:
+  - id: default
+    # No version in the name, so releases/latest/download/<name> is a stable URL.
+    name_template: "rainbow-statusline_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+release:
+  prerelease: auto
+
+# goreleaser no longer generates Homebrew formulae (brews is deprecated), so the
+# tap gets a cask with a binary stanza. The tap and bucket repositories do not
+# exist yet: until they do, the release workflow runs with --skip=homebrew,scoop
+# (docs/release.md). skip_upload: auto also keeps pre-release tags out of both.
+homebrew_casks:
+  - name: rainbow-statusline
+    repository:
+      owner: milczarekIT
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/milczarekIT/rainbow-statusline
+    description: Unified status line for AI coding assistants
+    skip_upload: auto
+    # The binary is not notarized, so macOS would quarantine it on download.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/rainbow-statusline"]
+          end
+
+scoops:
+  - name: rainbow-statusline
+    repository:
+      owner: milczarekIT
+      name: scoop-bucket
+      token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
+    homepage: https://github.com/milczarekIT/rainbow-statusline
+    description: Unified status line for AI coding assistants
+    skip_upload: auto

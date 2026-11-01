@@ -36,7 +36,7 @@ var Report io.Writer = io.Discard
 
 // Replaced in tests.
 var (
-	executable = os.Executable
+	executable = stableExecutable
 	goos       = runtime.GOOS
 
 	beforeStateSave = func() {}
