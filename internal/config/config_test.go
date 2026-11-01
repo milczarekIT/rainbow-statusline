@@ -114,3 +114,12 @@ func TestItems(t *testing.T) {
 		t.Errorf("got %v", got)
 	}
 }
+
+func TestMistypedFieldKeepsOthers(t *testing.T) {
+	path := useTempDir(t)
+	write(t, path, `{"density":5,"hidden":["rtk"],"order":["caveman"]}`)
+	c, _ := Load()
+	if c.Density != "full" || !reflect.DeepEqual(c.Hidden, []string{"rtk"}) || !reflect.DeepEqual(c.Order, []string{"caveman"}) {
+		t.Errorf("got %+v", c)
+	}
+}

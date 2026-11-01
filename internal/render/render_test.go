@@ -349,10 +349,21 @@ func TestCacheState(t *testing.T) {
 	}
 }
 
-func TestDensityCompactDropsFirstLine(t *testing.T) {
-	lines := Draw(fullSession(), nil, config.View{Density: "compact"}, 0)
-	if len(lines) != 1 || !strings.Contains(text(lines[0]), "Haiku 5.5") {
-		t.Errorf("want only the stats line, got %v", lines)
+func TestDensityCompactKeepsBadgeRow(t *testing.T) {
+	badges := []Badge{{Name: "RTK", Lines: []Segment{{Text: "[RTK]"}}}}
+	lines := Draw(fullSession(), badges, config.View{Density: "compact"}, 0)
+	if len(lines) != 2 || text(lines[0]) != "[RTK]" || !strings.Contains(text(lines[1]), "Haiku 5.5") {
+		t.Errorf("want badge row then stats row, got %v", lines)
+	}
+	if strings.Contains(text(lines[0])+text(lines[1]), "user@host") {
+		t.Error("compact must not draw user and directory")
+	}
+}
+
+func TestAllHiddenDrawsNoEmptyLine(t *testing.T) {
+	v := config.View{Density: "compact", Hidden: config.Items()}
+	if lines := Draw(fullSession(), nil, v, 0); len(lines) != 0 {
+		t.Errorf("want no lines, got %v", lines)
 	}
 }
 

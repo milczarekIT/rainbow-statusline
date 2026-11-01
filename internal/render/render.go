@@ -49,14 +49,15 @@ var effortColours = map[string]Segment{
 
 // Draw lays out the status line. A width of 0 or less means no limit.
 func Draw(s model.Session, badges []Badge, cfg config.View, width int) []Line {
-	minimal := cfg.Density == "minimal"
 	var lines []Line
-	if cfg.Density != "compact" && !minimal {
+	if cfg.Density != "compact" && cfg.Density != "minimal" {
 		lines = append(lines, Line{
 			{Text: s.User + "@" + s.Host, FG: green},
 			{Text: ":"},
 			{Text: s.Cwd, FG: "34"},
 		})
+	}
+	if cfg.Density != "minimal" {
 		if row := badgeRow(badges, cfg); len(row) > 0 {
 			lines = append(lines, row)
 		}
@@ -71,7 +72,9 @@ func Draw(s model.Session, badges []Badge, cfg config.View, width int) []Line {
 		}
 		stats = fit(stats, width)
 	}
-	lines = append(lines, stats)
+	if len(stats) > 0 {
+		lines = append(lines, stats)
+	}
 	for i, l := range lines {
 		lines[i] = sanitize(l)
 	}

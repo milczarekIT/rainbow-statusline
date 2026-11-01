@@ -27,13 +27,8 @@ func defaults() Config { return Config{View: View{Density: "full"}} }
 
 // Load reads the file. It never fails: a missing or broken file gives the
 // defaults, and false only when there is no file at all (the cue for the guide).
-func Load() (c Config, found bool) {
-	c = defaults()
-	defer func() {
-		if recover() != nil {
-			c, found = defaults(), true
-		}
-	}()
+func Load() (Config, bool) {
+	c := defaults()
 	p, err := path()
 	if err != nil {
 		return c, false
@@ -42,16 +37,22 @@ func Load() (c Config, found bool) {
 	if err != nil {
 		return c, !os.IsNotExist(err)
 	}
-	var parsed Config
-	if json.Unmarshal(raw, &parsed) != nil {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
 		return c, true
 	}
-	switch parsed.Density {
-	case "full", "compact", "minimal":
-	default:
-		parsed.Density = "full"
+	var density string
+	if json.Unmarshal(fields["density"], &density) == nil {
+		switch density {
+		case "full", "compact", "minimal":
+			c.Density = density
+		}
 	}
-	return parsed, true
+	_ = json.Unmarshal(fields["order"], &c.Order)
+	_ = json.Unmarshal(fields["hidden"], &c.Hidden)
+	_ = json.Unmarshal(fields["variants"], &c.Variants)
+	_ = json.Unmarshal(fields["agents"], &c.Agents)
+	return c, true
 }
 
 // Save writes the file atomically and keeps keys it does not know.
