@@ -194,3 +194,14 @@ func TestWantsScreen(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenUIGuideOnlyWithoutConfig(t *testing.T) {
+	var ran []string
+	guide := func() error { ran = append(ran, "guide"); return nil }
+	screen := func() error { ran = append(ran, "screen"); return nil }
+	_ = openUI(false, guide, screen)
+	_ = openUI(true, guide, screen)
+	if strings.Join(ran, ",") != "guide,screen" {
+		t.Errorf("ran %v", ran)
+	}
+}

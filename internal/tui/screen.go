@@ -37,6 +37,15 @@ type agentRow struct {
 	selected bool
 }
 
+// toggle flips the selection and returns a note when it cannot.
+func (a *agentRow) toggle() string {
+	if !a.Found {
+		return a.Name + " was not found on this computer, so it cannot be selected."
+	}
+	a.selected = !a.selected
+	return ""
+}
+
 type screen struct {
 	view     config.View
 	rows     []string // item ids in display order
@@ -171,29 +180,27 @@ func clamp(i, n int) int {
 
 func (m *screen) toggle() {
 	if m.onAgents {
-		if len(m.agents) == 0 {
-			return
+		if len(m.agents) > 0 {
+			m.footer = m.agents[m.agentCur].toggle()
 		}
-		a := &m.agents[m.agentCur]
-		if !a.Found {
-			m.footer = a.Name + " was not found on this computer, so it cannot be selected."
-			return
-		}
-		a.selected = !a.selected
 		return
 	}
-	id := m.rows[m.cursor]
-	if m.view.Shows(id) {
-		m.view.Hidden = append(m.view.Hidden, id)
+	toggleItem(&m.view, m.rows[m.cursor])
+}
+
+// toggleItem hides a shown item and shows a hidden one.
+func toggleItem(v *config.View, id string) {
+	if v.Shows(id) {
+		v.Hidden = append(v.Hidden, id)
 		return
 	}
 	var kept []string
-	for _, h := range m.view.Hidden {
+	for _, h := range v.Hidden {
 		if h != id {
 			kept = append(kept, h)
 		}
 	}
-	m.view.Hidden = kept
+	v.Hidden = kept
 }
 
 func (m *screen) variant(id string) string {

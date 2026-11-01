@@ -51,9 +51,8 @@ func main() {
 		flagsSet := 0
 		flags.Visit(func(*flag.Flag) { flagsSet++ })
 		if wantsScreen(term.IsTerminal(int(os.Stdin.Fd())), term.IsTerminal(int(os.Stdout.Fd())), flagsSet) {
-			// Without a config file the defaults will do until the first-run guide exists.
-			cfg, _ := config.Load()
-			if err := tui.RunScreen(cfg); err != nil {
+			cfg, found := config.Load()
+			if err := openUI(found, tui.RunGuide, func() error { return tui.RunScreen(cfg) }); err != nil {
 				fmt.Fprintln(os.Stderr, "rainbow-statusline:", err)
 				os.Exit(1)
 			}
@@ -91,6 +90,14 @@ func main() {
 // command in a terminal, never for an assistant calling it with flags.
 func wantsScreen(stdinTTY, stdoutTTY bool, flagsSet int) bool {
 	return stdinTTY && stdoutTTY && flagsSet == 0
+}
+
+// openUI runs the first-run guide until a configuration exists, the screen after.
+func openUI(configFound bool, guide, screen func() error) error {
+	if configFound {
+		return screen()
+	}
+	return guide()
 }
 
 // runUninstall is the one command that reports failure: nothing is drawing here.

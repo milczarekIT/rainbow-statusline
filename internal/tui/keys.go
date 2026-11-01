@@ -18,6 +18,7 @@ const (
 	actQuit
 	actYes
 	actNo
+	actNext
 )
 
 var keymap = map[string]action{
@@ -26,7 +27,7 @@ var keymap = map[string]action{
 	"shift+up": actMoveUp, "shift+down": actMoveDown,
 	"space": actToggle, "tab": actSwitch,
 	"s": actSave, "q": actQuit, "ctrl+c": actQuit,
-	"y": actYes, "n": actNo, "esc": actNo,
+	"enter": actNext, "y": actYes, "n": actNo, "esc": actNo,
 }
 
 func actionFor(msg tea.KeyPressMsg) action { return keymap[msg.Keystroke()] }
