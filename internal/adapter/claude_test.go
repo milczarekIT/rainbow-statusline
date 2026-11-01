@@ -97,12 +97,59 @@ func TestNegativeUsageIsUnknown(t *testing.T) {
 	}
 }
 
+func cacheSession(pc string) model.Session {
+	return Parse("claude", []byte(`{"context_window":{"context_window_size":100,"current_usage":{"input_tokens":1}},"prompt_cache":`+pc+`}`))
+}
+
 func TestColdCacheIsExpired(t *testing.T) {
-	for _, pc := range []string{`{"warm":false,"expires_at":1793568670,"ttl":"1h"}`, `{"warm":true,"ttl":"1h"}`} {
-		s := Parse("claude", []byte(`{"context_window":{"context_window_size":100,"current_usage":{"input_tokens":1}},"prompt_cache":`+pc+`}`))
-		if got := draw(t, s); !strings.Contains(got, "✖ expired") {
-			t.Errorf("%s: got %q", pc, got)
+	s := cacheSession(`{"warm":false,"expires_at":1793568670,"ttl":"1h"}`)
+	if got := draw(t, s); !strings.Contains(got, "✖ expired") {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestUnknownWarmIsNotCold(t *testing.T) {
+	for _, warm := range []string{``, `"warm":null,`, `"warm":"yes",`} {
+		s := cacheSession(`{` + warm + `"expires_at":1793568670,"ttl":"1h"}`)
+		if s.CacheWarm != nil {
+			t.Errorf("%q: CacheWarm must be nil", warm)
 		}
+		got := draw(t, s)
+		if strings.Contains(got, "expired") || !strings.Contains(got, "30:00") {
+			t.Errorf("%q: got %q", warm, got)
+		}
+	}
+}
+
+func TestBadExpiryIsUnknown(t *testing.T) {
+	for _, at := range []string{`"expires_at":-5,`, `"expires_at":1e300,`, `"expires_at":0,`, `"expires_at":"soon",`, `"expires_at":null,`, ``} {
+		s := cacheSession(`{"warm":true,` + at + `"ttl":"1h"}`)
+		if s.CacheExpiresAt != nil {
+			t.Errorf("%q: got %v", at, s.CacheExpiresAt)
+		}
+		if got := draw(t, s); strings.Contains(got, "expired") {
+			t.Errorf("%q: got %q", at, got)
+		}
+	}
+}
+
+func TestCacheTimerWithoutUsage(t *testing.T) {
+	s := Parse("claude", []byte(`{"context_window":{"current_usage":null},"prompt_cache":{"warm":true,"expires_at":1793568670,"ttl":"1h"}}`))
+	got := draw(t, s)
+	for _, want := range []string{"30:00", "read ", "—"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("want %q in %q", want, got)
+		}
+	}
+	if s.CacheRead != nil || s.CacheWrite != nil {
+		t.Errorf("read and write must stay unknown: %+v", s)
+	}
+}
+
+func TestDisagreeingUsedPercentage(t *testing.T) {
+	s := Parse("claude", []byte(`{"context_window":{"context_window_size":200000,"used_percentage":100,"current_usage":{"input_tokens":1000}}}`))
+	if got := draw(t, s); !strings.Contains(got, "(0.5%)") {
+		t.Errorf("got %q", got)
 	}
 }
 

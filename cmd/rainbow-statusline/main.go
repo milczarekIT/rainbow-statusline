@@ -13,6 +13,7 @@ import (
 	"github.com/milczarekIT/rainbow-statusline/internal/config"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 	"github.com/milczarekIT/rainbow-statusline/internal/render"
+	"golang.org/x/term"
 )
 
 func main() {
@@ -22,6 +23,7 @@ func main() {
 	flags := flag.NewFlagSet("rainbow-statusline", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	agent := flags.String("agent", "claude", "assistant whose input arrives on stdin")
+	widthFlag := flags.Int("width", 0, "columns available to the status line")
 	_ = flags.Parse(os.Args[1:])
 
 	if info, err := os.Stdin.Stat(); err != nil || info.Mode()&os.ModeCharDevice != 0 {
@@ -30,7 +32,7 @@ func main() {
 	stdin, _ := io.ReadAll(os.Stdin)
 	s := adapter.Parse(*agent, stdin)
 	fillFromSystem(&s)
-	width, _ := strconv.Atoi(os.Getenv("COLUMNS"))
+	width := resolveWidth(*widthFlag, os.Getenv("COLUMNS"), stderrWidth, controllingTerminalWidth)
 	fmt.Print(render.ANSI(render.Draw(s, nil, config.View{}, width)))
 }
 
@@ -44,4 +46,42 @@ func fillFromSystem(s *model.Session) {
 	if s.Cwd == "" {
 		s.Cwd, _ = os.Getwd()
 	}
+}
+
+// resolveWidth takes the first positive width: flag, COLUMNS, then each terminal
+// source. 0 means no trimming.
+func resolveWidth(flagWidth int, columns string, sources ...func() int) int {
+	if flagWidth > 0 {
+		return flagWidth
+	}
+	if n, err := strconv.Atoi(columns); err == nil && n > 0 {
+		return n
+	}
+	for _, source := range sources {
+		if n := source(); n > 0 {
+			return n
+		}
+	}
+	return 0
+}
+
+func stderrWidth() int {
+	w, _, err := term.GetSize(int(os.Stderr.Fd()))
+	if err != nil {
+		return 0
+	}
+	return w
+}
+
+func controllingTerminalWidth() int {
+	f, err := os.OpenFile(controllingTerminal, os.O_RDWR, 0)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+	w, _, err := term.GetSize(int(f.Fd()))
+	if err != nil {
+		return 0
+	}
+	return w
 }

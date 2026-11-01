@@ -74,16 +74,21 @@ func parseClaude(stdin []byte) model.Session {
 	}
 	if pc := optional[claudeCache](in.PromptCache); pc != nil {
 		s.CacheTTL = pc.TTL
-		// A cold cache or a missing expiry counts as already lapsed, as in the original script.
-		lapsed := time.Unix(0, 0)
-		s.CacheExpiresAt = &lapsed
-		warm, expires := optional[bool](pc.Warm), optional[float64](pc.ExpiresAt)
-		if warm != nil && *warm && expires != nil {
-			at := time.Unix(int64(*expires), 0)
-			s.CacheExpiresAt = &at
-		}
+		s.CacheWarm = optional[bool](pc.Warm)
+		s.CacheExpiresAt = expiry(optional[float64](pc.ExpiresAt))
 	}
 	return s
+}
+
+// maxExpiry is the end of year 9999. Larger values are garbage, or milliseconds.
+const maxExpiry = 253402300799
+
+func expiry(sec *float64) *time.Time {
+	if sec == nil || *sec <= 0 || *sec > maxExpiry {
+		return nil
+	}
+	at := time.Unix(int64(*sec), 0)
+	return &at
 }
 
 // optional decodes raw, returning nil when it is absent, null or the wrong type.

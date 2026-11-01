@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/milczarekIT/rainbow-statusline/internal/config"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
@@ -53,10 +54,30 @@ func TestContextOver100(t *testing.T) {
 	}
 }
 
-func TestImpossibleContextPct(t *testing.T) {
-	s := model.Session{ContextUsed: ptr[int64](1), ContextSize: ptr[int64](10), ContextPct: ptr(140.0)}
+func TestReportedContextPct(t *testing.T) {
+	cases := []struct {
+		name       string
+		used, size int64
+		reported   float64
+		want       string
+	}{
+		{"close keeps reported", 95264, 1000000, 10, "(10.0%)"},
+		{"exactly 2 points keeps reported", 10, 100, 12, "(12.0%)"},
+		{"disagreement uses used/size", 1000, 200000, 100, "(0.5%)"},
+		{"out of range reported uses used/size", 1, 10, 140, "(10.0%)"},
+	}
+	for _, c := range cases {
+		s := model.Session{ContextUsed: ptr(c.used), ContextSize: ptr(c.size), ContextPct: ptr(c.reported)}
+		if got := last(Draw(s, nil, config.View{}, 0)); !strings.Contains(got, c.want) {
+			t.Errorf("%s: want %q in %q", c.name, c.want, got)
+		}
+	}
+}
+
+func TestReportedPctOver100WithinToleranceIsDash(t *testing.T) {
+	s := model.Session{ContextUsed: ptr[int64](100), ContextSize: ptr[int64](100), ContextPct: ptr(101.0)}
 	if got := last(Draw(s, nil, config.View{}, 0)); !strings.Contains(got, "ctx —") {
-		t.Errorf("want ctx dash, got %q", got)
+		t.Errorf("got %q", got)
 	}
 }
 
@@ -221,5 +242,93 @@ func TestJSON(t *testing.T) {
 	}
 	if string(JSON(nil)) != "[]" {
 		t.Errorf("nil lines: %s", JSON(nil))
+	}
+}
+
+func TestControlCharactersAreReplaced(t *testing.T) {
+	freeze(t)
+	payloads := []string{"a\x1b[31mb", "a\x1b]0;title\x07b", "a\nb", "a\rb", "a\x7fb", "a\u009bb"}
+	for _, p := range payloads {
+		s := fullSession()
+		s.Cwd, s.Model, s.Effort, s.CacheTTL = p, p, p, p
+		s.User, s.Host = p, p
+		badges := []Badge{{Name: "B", Lines: []Segment{{Text: p}}}}
+		for _, width := range []int{0, 40} {
+			lines := Draw(s, badges, config.View{}, width)
+			for _, l := range lines {
+				for _, seg := range l {
+					if strings.ContainsFunc(seg.Text, unicode.IsControl) {
+						t.Errorf("%q width %d: control rune in segment %q", p, width, seg.Text)
+					}
+				}
+			}
+			out := ANSI(lines)
+			if width == 0 && !strings.Contains(out, "\x1b[34m"+strings.Map(func(r rune) rune {
+				if unicode.IsControl(r) {
+					return '?'
+				}
+				return r
+			}, p)+"\x1b[0m") {
+				t.Errorf("%q: own colour codes must stay around the replaced text: %q", p, out)
+			}
+			if n := strings.Count(out, "\n"); n != len(lines)-1 {
+				t.Errorf("%q: %d newlines for %d lines", p, n, len(lines))
+			}
+			stripped := regexp.MustCompile(`\x1b\[[0-9;]*m`).ReplaceAllString(out, "")
+			if strings.ContainsFunc(strings.ReplaceAll(stripped, "\n", ""), unicode.IsControl) {
+				t.Errorf("%q: injected control rune in ANSI: %q", p, out)
+			}
+			var parsed [][]Segment
+			if err := json.Unmarshal(JSON(lines), &parsed); err != nil {
+				t.Fatal(err)
+			}
+			for _, l := range parsed {
+				for _, seg := range l {
+					if strings.ContainsFunc(seg.Text, unicode.IsControl) {
+						t.Errorf("%q: control rune in JSON %q", p, seg.Text)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestDrawDoesNotChangeCallersBadges(t *testing.T) {
+	badges := []Badge{{Lines: []Segment{{Text: "a\x1bb"}}}}
+	Draw(model.Session{}, badges, config.View{}, 0)
+	if badges[0].Lines[0].Text != "a\x1bb" {
+		t.Errorf("got %q", badges[0].Lines[0].Text)
+	}
+}
+
+func TestCacheState(t *testing.T) {
+	freeze(t)
+	future := ptr(fixedNow.Add(30 * time.Minute))
+	cases := []struct {
+		name    string
+		warm    *bool
+		expires *time.Time
+		want    string
+	}{
+		{"unknown warm keeps timer", nil, future, "⏱ 30:00"},
+		{"warm keeps timer", ptr(true), future, "⏱ 30:00"},
+		{"cold is expired", ptr(false), future, "✖ expired"},
+		{"cold without expiry is expired", ptr(false), nil, "✖ expired"},
+		{"warm without expiry is unknown", ptr(true), nil, "⏱ —"},
+		{"past expiry is expired", nil, ptr(fixedNow.Add(-time.Minute)), "✖ expired"},
+		{"unbelievable expiry is unknown", ptr(true), ptr(fixedNow.Add(48 * time.Hour)), "⏱ —"},
+	}
+	for _, c := range cases {
+		s := model.Session{CacheWarm: c.warm, CacheExpiresAt: c.expires, CacheTTL: "1h"}
+		got := last(Draw(s, nil, config.View{}, 0))
+		if !strings.Contains(got, c.want) {
+			t.Errorf("%s: want %q in %q", c.name, c.want, got)
+		}
+		if !strings.Contains(got, "read —") || !strings.Contains(got, "write —") {
+			t.Errorf("%s: read and write must be dashes: %q", c.name, got)
+		}
+	}
+	if got := last(Draw(model.Session{CacheRead: ptr[int64](5)}, nil, config.View{}, 0)); !strings.Contains(got, "cache —") {
+		t.Errorf("no cache data: got %q", got)
 	}
 }

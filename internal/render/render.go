@@ -6,6 +6,7 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/milczarekIT/rainbow-statusline/internal/config"
 	"github.com/milczarekIT/rainbow-statusline/internal/format"
@@ -73,7 +74,28 @@ func Draw(s model.Session, badges []Badge, cfg config.View, width int) []Line {
 		}
 		stats = fit(stats, width)
 	}
-	return append(lines, stats)
+	lines = append(lines, stats)
+	for i, l := range lines {
+		lines[i] = sanitize(l)
+	}
+	return lines
+}
+
+// sanitize is the only gate between outside text and the terminal: a control
+// rune in a path or a model name could otherwise drive it. Both outputs read
+// Draw's lines. '?' is as wide as what it replaces, so fitting stays correct.
+func sanitize(l Line) Line {
+	out := make(Line, len(l))
+	for i, s := range l {
+		s.Text = strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) {
+				return '?'
+			}
+			return r
+		}, s.Text)
+		out[i] = s
+	}
+	return out
 }
 
 // maxStage is the last step of width trimming: 1 drops the cache details,
@@ -139,6 +161,10 @@ func contextSegments(s model.Session, short bool) Line {
 		Segment{Text: "(" + fixed(pct, 1) + "%)", FG: col})
 }
 
+// maxPctDisagreement is how many points the assistant's own percentage may
+// differ from used/size before the counted tokens win.
+const maxPctDisagreement = 2
+
 func contextPct(s model.Session) (float64, bool) {
 	if s.ContextUsed == nil || s.ContextSize == nil {
 		return 0, false
@@ -148,7 +174,7 @@ func contextPct(s model.Session) (float64, bool) {
 		return 0, false
 	}
 	pct := used * 100 / size
-	if s.ContextPct != nil {
+	if s.ContextPct != nil && math.Abs(*s.ContextPct-pct) <= maxPctDisagreement {
 		pct = *s.ContextPct
 	}
 	_, ok := format.Pct(pct, 100, 1)
@@ -168,17 +194,11 @@ func cost(c *float64) string {
 }
 
 func cacheSegments(s model.Session, short bool) Line {
-	if s.CacheRead == nil || s.CacheExpiresAt == nil {
+	if s.CacheWarm == nil && s.CacheExpiresAt == nil {
 		return Line{{Text: "cache " + format.Dash, Dim: true}}
 	}
 	if short {
 		return Line{timer(s)}
-	}
-	var write string
-	if s.CacheWrite == nil {
-		write = format.Dash
-	} else {
-		write = k(*s.CacheWrite)
 	}
 	ttl := s.CacheTTL
 	if ttl == "" {
@@ -189,10 +209,10 @@ func cacheSegments(s model.Session, short bool) Line {
 		{Text: "⚡", FG: "38;5;39"},
 		{Text: " "},
 		{Text: "read ", Dim: true},
-		{Text: k(*s.CacheRead), FG: "38;5;45"},
+		{Text: optionalK(s.CacheRead), FG: "38;5;45"},
 		dot,
 		{Text: "write ", Dim: true},
-		{Text: write, FG: "38;5;213"},
+		{Text: optionalK(s.CacheWrite), FG: "38;5;213"},
 		dot,
 		timer(s),
 		{Text: " "},
@@ -200,14 +220,28 @@ func cacheSegments(s model.Session, short bool) Line {
 	}
 }
 
+// maxCacheLeft is far beyond any cache TTL; a longer countdown is not believable.
+const maxCacheLeft = 24 * 60 * 60
+
 func timer(s model.Session) Segment {
+	expired := Segment{Text: "✖ expired", FG: red, Bold: true}
+	if s.CacheWarm != nil && !*s.CacheWarm {
+		return expired
+	}
+	unknown := Segment{Text: "⏱ " + format.Dash, Dim: true}
+	if s.CacheExpiresAt == nil {
+		return unknown
+	}
 	left := s.CacheExpiresAt.Unix() - Now().Unix()
+	if left > maxCacheLeft {
+		return unknown
+	}
+	if left <= 0 {
+		return expired
+	}
 	life := int64(300)
 	if s.CacheTTL == "1h" {
 		life = 3600
-	}
-	if left <= 0 {
-		return Segment{Text: "✖ expired", FG: red, Bold: true}
 	}
 	text := "⏱ "
 	if s.CacheEstimated {
@@ -229,6 +263,13 @@ func clock(sec int64) string {
 		return fmt.Sprintf("%d:%02d:%02d", m/60, m%60, sec%60)
 	}
 	return fmt.Sprintf("%d:%02d", m, sec%60)
+}
+
+func optionalK(n *int64) string {
+	if n == nil {
+		return format.Dash
+	}
+	return k(*n)
 }
 
 // k is the script's compact count for this line: 1k and 1000k rather than
