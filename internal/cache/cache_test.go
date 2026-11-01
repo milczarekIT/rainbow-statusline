@@ -126,3 +126,121 @@ func TestUnsafeKeysRejected(t *testing.T) {
 		t.Fatal("spawned for unsafe key")
 	}
 }
+
+func TestFailedRefreshBacksOff(t *testing.T) {
+	spawns := setup(t)
+	Register("bad", func(ctx context.Context) ([]byte, error) { return nil, errors.New("boom") })
+	Get("bad", time.Minute)
+	_ = Refresh("bad")
+	Get("bad", time.Minute)
+	if n := atomic.LoadInt32(spawns); n != 1 {
+		t.Fatalf("spawns after failure = %d", n)
+	}
+	dir, _ := baseDir()
+	lock := filepath.Join(dir, "bad.lock")
+	old := time.Now().Add(-time.Minute)
+	_ = os.Chtimes(lock, old, old)
+	Get("bad", time.Minute)
+	if n := atomic.LoadInt32(spawns); n != 2 {
+		t.Fatalf("spawns after stale lock = %d", n)
+	}
+}
+
+func TestUnregisteredKeyKeepsLock(t *testing.T) {
+	spawns := setup(t)
+	Get("ghost", time.Minute)
+	_ = Refresh("ghost")
+	Get("ghost", time.Minute)
+	if n := atomic.LoadInt32(spawns); n != 1 {
+		t.Fatalf("spawns = %d", n)
+	}
+}
+
+func TestSuccessReleasesLock(t *testing.T) {
+	setup(t)
+	Register("ok", func(ctx context.Context) ([]byte, error) { return []byte("v"), nil })
+	Get("ok", time.Minute)
+	_ = Refresh("ok")
+	dir, _ := baseDir()
+	if _, err := os.Stat(filepath.Join(dir, "ok.lock")); !os.IsNotExist(err) {
+		t.Fatal("lock left after success")
+	}
+}
+
+func TestEmptyResultKeepsPrevious(t *testing.T) {
+	setup(t)
+	val := []byte("old")
+	Register("e", func(ctx context.Context) ([]byte, error) { return val, nil })
+	_ = Refresh("e")
+	val = nil
+	if Refresh("e") == nil {
+		t.Fatal("empty result accepted")
+	}
+	if v, ok := Get("e", time.Hour); !ok || string(v) != "old" {
+		t.Fatalf("got %q %v", v, ok)
+	}
+}
+
+func TestValueOlderThanMaxStaleIsHidden(t *testing.T) {
+	spawns := setup(t)
+	Register("s", func(ctx context.Context) ([]byte, error) { return []byte("v"), nil })
+	_ = Refresh("s")
+	dir, _ := baseDir()
+	p := filepath.Join(dir, "s")
+	set := func(age time.Duration) {
+		ts := time.Now().Add(-age)
+		_ = os.Chtimes(p, ts, ts)
+	}
+	set(maxStale - time.Hour)
+	if v, ok := Get("s", time.Minute); !ok || string(v) != "v" {
+		t.Fatalf("within limit: %q %v", v, ok)
+	}
+	set(maxStale + time.Hour)
+	_ = os.Remove(p + ".lock")
+	before := atomic.LoadInt32(spawns)
+	if _, ok := Get("s", time.Minute); ok {
+		t.Fatal("value past maxStale returned")
+	}
+	if atomic.LoadInt32(spawns) != before+1 {
+		t.Fatal("no refresh for hidden value")
+	}
+}
+
+func TestRenameRetries(t *testing.T) {
+	oldRename, oldDelay := rename, renameDelay
+	t.Cleanup(func() { rename, renameDelay = oldRename, oldDelay })
+	renameDelay = 0
+	calls := 0
+	rename = func(a, b string) error {
+		calls++
+		if calls < 3 {
+			return errors.New("access denied")
+		}
+		return nil
+	}
+	if err := renameWithRetry("a", "b"); err != nil || calls != 3 {
+		t.Fatalf("err=%v calls=%d", err, calls)
+	}
+	calls = 0
+	rename = func(a, b string) error { calls++; return errors.New("denied") }
+	if renameWithRetry("a", "b") == nil || calls != 5 {
+		t.Fatalf("calls=%d", calls)
+	}
+}
+
+func TestFailedRenameRemovesTemp(t *testing.T) {
+	setup(t)
+	oldRename, oldDelay := rename, renameDelay
+	t.Cleanup(func() { rename, renameDelay = oldRename, oldDelay })
+	renameDelay = 0
+	rename = func(a, b string) error { return errors.New("denied") }
+	Register("r", func(ctx context.Context) ([]byte, error) { return []byte("v"), nil })
+	if Refresh("r") == nil {
+		t.Fatal("expected error")
+	}
+	dir, _ := baseDir()
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 0 {
+		t.Fatalf("leftovers: %v", entries)
+	}
+}

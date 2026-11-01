@@ -4,6 +4,7 @@ package cache
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,8 @@ import (
 const (
 	refreshLimit = 20 * time.Second
 	staleLock    = 30 * time.Second
+	maxStale     = 24 * time.Hour
+	renameTries  = 5
 )
 
 var (
@@ -23,6 +26,9 @@ var (
 	// baseDir and spawn are replaced in tests.
 	baseDir = defaultDir
 	spawn   = spawnDetached
+	rename  = os.Rename
+
+	renameDelay = 20 * time.Millisecond
 )
 
 func defaultDir() (string, error) {
@@ -63,15 +69,24 @@ func Get(key string, maxAge time.Duration) ([]byte, bool) {
 	if err != nil {
 		return nil, false
 	}
-	value, readErr := os.ReadFile(p)
-	info, statErr := os.Stat(p)
-	fresh := readErr == nil && statErr == nil && time.Since(info.ModTime()) <= maxAge
-	if !fresh && takeLock(p+".lock") {
+	var value []byte
+	var age time.Duration
+	f, openErr := os.Open(p)
+	readOK := false
+	if openErr == nil {
+		if info, err := f.Stat(); err == nil {
+			if v, err := io.ReadAll(f); err == nil {
+				value, age, readOK = v, time.Since(info.ModTime()), true
+			}
+		}
+		_ = f.Close()
+	}
+	if (!readOK || age > maxAge) && takeLock(p+".lock") {
 		if spawn(key) != nil {
 			_ = os.Remove(p + ".lock")
 		}
 	}
-	if readErr != nil {
+	if !readOK || age > maxStale {
 		return nil, false
 	}
 	return value, true
@@ -101,14 +116,13 @@ func takeLock(lock string) bool {
 }
 
 // Refresh computes the value for key and stores it atomically. A failure keeps
-// the previous value. It always releases the lock.
+// the previous value and the lock, so the next attempt waits until the lock
+// goes stale. Success releases the lock.
 func Refresh(key string) error {
 	p, err := path(key)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(p + ".lock")
-
 	mu.Lock()
 	fn := registry[key]
 	mu.Unlock()
@@ -120,6 +134,9 @@ func Refresh(key string) error {
 	value, err := fn(ctx)
 	if err != nil {
 		return err
+	}
+	if len(value) == 0 {
+		return errors.New("cache: empty value")
 	}
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		return err
@@ -136,5 +153,23 @@ func Refresh(key string) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), p)
+	if err := renameWithRetry(tmp.Name(), p); err != nil {
+		return err
+	}
+	_ = os.Remove(p + ".lock")
+	return nil
+}
+
+// renameWithRetry covers Windows refusing to replace a file a reader holds open.
+func renameWithRetry(from, to string) error {
+	var err error
+	for i := range renameTries {
+		if err = rename(from, to); err == nil {
+			return nil
+		}
+		if i < renameTries-1 {
+			time.Sleep(renameDelay)
+		}
+	}
+	return err
 }
