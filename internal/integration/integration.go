@@ -29,7 +29,7 @@ type Integration interface {
 }
 
 // All returns the integrations in badge order.
-func All() []Integration { return []Integration{rtk{}, claudeMem{}} }
+func All() []Integration { return []Integration{ponytail{}, caveman{}, rtk{}, claudeMem{}} }
 
 const (
 	keyRTKTotal   = "rtk-total"
@@ -59,7 +59,7 @@ var (
 // RegisterCaches teaches the cache how to compute every key this package reads.
 // Both the drawing process and the refresh process must call it first.
 func RegisterCaches() {
-	for _, key := range []string{keyRTKTotal, keyMemTotal} {
+	for _, key := range []string{keyRTKTotal, keyMemTotal, keyCaveTotal} {
 		cache.Register(key, func(ctx context.Context) ([]byte, error) { return compute(ctx, key) })
 	}
 	for _, p := range []string{prefixRTKHook, prefixRTKBash, prefixTx, prefixMemInj} {
@@ -76,6 +76,8 @@ func compute(ctx context.Context, key string) ([]byte, error) {
 		return computeRTKTotal(ctx)
 	case key == keyMemTotal:
 		return computeMemTotal(ctx)
+	case key == keyCaveTotal:
+		return computeCaveTotal(ctx)
 	case strings.HasPrefix(key, prefixRTKHook):
 		return computeRTKHook(ctx, strings.TrimPrefix(key, prefixRTKHook))
 	case strings.HasPrefix(key, prefixRTKBash):

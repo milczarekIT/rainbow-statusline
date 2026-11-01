@@ -29,7 +29,7 @@ func setup(t *testing.T) *env {
 	e.rtkDB = filepath.Join(e.dir, "history.db")
 	e.memDir = filepath.Join(e.dir, "claude-mem")
 	oldGet, oldIn, oldLook, oldDB := cacheGet, inputDir, lookPath, rtkDBPath
-	oldMem, oldSet := claudeMemDir, claudeSettings
+	oldMem, oldSet, oldClaude := claudeMemDir, claudeSettings, claudeDir
 	cacheGet = func(key string, _ time.Duration) ([]byte, bool) {
 		if v, ok := e.canned[key]; ok {
 			return []byte(v), true
@@ -44,9 +44,10 @@ func setup(t *testing.T) *env {
 	rtkDBPath = func() string { return e.rtkDB }
 	claudeMemDir = func() string { return e.memDir }
 	claudeSettings = func() string { return filepath.Join(e.dir, "settings.json") }
+	claudeDir = func() string { return e.dir }
 	t.Cleanup(func() {
 		cacheGet, inputDir, lookPath, rtkDBPath = oldGet, oldIn, oldLook, oldDB
-		claudeMemDir, claudeSettings = oldMem, oldSet
+		claudeMemDir, claudeSettings, claudeDir = oldMem, oldSet, oldClaude
 	})
 	return e
 }
