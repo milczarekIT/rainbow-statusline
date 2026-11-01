@@ -731,10 +731,10 @@ func TestCommandWithSpaces(t *testing.T) {
 		goos, path, want string
 		args             []string
 	}{
-		{"windows", `C:\Users\Łukasz K\bin\rainbow-statusline.exe`, `"C:\Users\Łukasz K\bin\rainbow-statusline.exe" --agent claude`, []string{"--agent", "claude"}},
+		{"windows", `C:\Users\Żółć Test\bin\rainbow-statusline.exe`, `"C:\Users\Żółć Test\bin\rainbow-statusline.exe" --agent claude`, []string{"--agent", "claude"}},
 		{"windows", `C:\Program Files (x86)\r.exe`, `"C:\Program Files (x86)\r.exe" --agent copilot`, []string{"--agent", "copilot"}},
 		{"windows", `C:\plain\r.exe`, `"C:\plain\r.exe" "a b"`, []string{"a b"}},
-		{"darwin", "/Users/Łukasz K/bin/rainbow-statusline", `'/Users/Łukasz K/bin/rainbow-statusline' --agent claude`, []string{"--agent", "claude"}},
+		{"darwin", "/Users/Żółć Test/bin/rainbow-statusline", `'/Users/Żółć Test/bin/rainbow-statusline' --agent claude`, []string{"--agent", "claude"}},
 		{"darwin", "/opt/bin/rs", "/opt/bin/rs --agent claude", []string{"--agent", "claude"}},
 		{"linux", "/o'brien/$x/rs", `'/o'\''brien/$x/rs' 'a b'`, []string{"a b"}},
 	} {
@@ -757,7 +757,7 @@ func TestFileURL(t *testing.T) {
 	for _, tc := range []struct{ goos, path, want string }{
 		{"darwin", "/Users/me/.config/opencode/plugins/rainbow-statusline/tui.tsx", "file:///Users/me/.config/opencode/plugins/rainbow-statusline/tui.tsx"},
 		{"darwin", "/Users/Łu kasz/#1/tui.tsx", "file:///Users/%C5%81u%20kasz/%231/tui.tsx"},
-		{"windows", `C:\Users\Łukasz K\.config\tui.tsx`, "file:///C:/Users/%C5%81ukasz%20K/.config/tui.tsx"},
+		{"windows", `C:\Users\Żółć Test\.config\tui.tsx`, "file:///C:/Users/%C5%BB%C3%B3%C5%82%C4%87%20Test/.config/tui.tsx"},
 		{"windows", `\\srv\share\tui.tsx`, "file://srv/share/tui.tsx"},
 	} {
 		if got := fileURL(tc.goos, tc.path); got != tc.want {
@@ -771,7 +771,7 @@ func TestQuotedCommandRunsInSh(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("needs sh")
 	}
-	dir := filepath.Join(t.TempDir(), "Łukasz K's $HOME")
+	dir := filepath.Join(t.TempDir(), "Żółć Test's $HOME")
 	script := filepath.Join(dir, "rainbow-statusline")
 	put(t, script, "#!/bin/sh\necho ran \"$@\"\n")
 	if err := os.Chmod(script, 0o755); err != nil {

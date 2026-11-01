@@ -1,10 +1,6 @@
 version: 2
 project_name: rainbow-statusline
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
   - id: rainbow-statusline
     main: ./cmd/rainbow-statusline
@@ -34,11 +30,12 @@ changelog:
 release:
   prerelease: auto
 
-# goreleaser no longer generates Homebrew formulae (brews is deprecated), so the
-# tap gets a cask with a binary stanza. The tap and bucket repositories do not
-# exist yet: until they do, the release workflow runs with --skip=homebrew,scoop
-# (docs/release.md). skip_upload: auto also keeps pre-release tags out of both.
-homebrew_casks:
+# A plain formula, not a cask: a cask download is quarantined and an unsigned
+# binary would be blocked by Gatekeeper. goreleaser deprecates "brews" but still
+# supports it in the pinned version (docs/release.md). The tap and bucket
+# repositories do not exist yet: until they do, the release workflow does not run
+# the publish steps. skip_upload: auto also keeps pre-release tags out.
+brews:
   - name: rainbow-statusline
     repository:
       owner: milczarekIT
@@ -47,13 +44,8 @@ homebrew_casks:
     homepage: https://github.com/milczarekIT/rainbow-statusline
     description: Unified status line for AI coding assistants
     skip_upload: auto
-    # The binary is not notarized, so macOS would quarantine it on download.
-    hooks:
-      post:
-        install_steps: |
-          on_macos do
-            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/rainbow-statusline"]
-          end
+    test: |
+      assert_match "ctx", shell_output("echo '{}' | #{bin}/rainbow-statusline --agent claude")
 
 scoops:
   - name: rainbow-statusline

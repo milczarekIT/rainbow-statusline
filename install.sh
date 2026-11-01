@@ -18,58 +18,69 @@ die() {
 	exit 1
 }
 
-case "$(uname -s)" in
-Darwin) os=darwin ;;
-*) die "this script supports macOS only; on Windows use install.ps1" ;;
-esac
-case "$(uname -m)" in
-arm64 | aarch64) arch=arm64 ;;
-x86_64 | amd64) arch=amd64 ;;
-*) die "unsupported CPU: $(uname -m)" ;;
-esac
+# Everything runs inside main, called on the last line, so a download cut short
+# in the middle of a "curl | sh" never executes half a script.
+main() {
+	case "$(uname -s)" in
+	Darwin) os=darwin ;;
+	*) die "this script supports macOS only; on Windows use install.ps1" ;;
+	esac
+	case "$(uname -m)" in
+	arm64 | aarch64) arch=arm64 ;;
+	x86_64 | amd64) arch=amd64 ;;
+	*) die "unsupported CPU: $(uname -m)" ;;
+	esac
 
-if [ -n "${RAINBOW_STATUSLINE_BASE_URL:-}" ]; then
-	base="$RAINBOW_STATUSLINE_BASE_URL"
-elif [ -n "${RAINBOW_STATUSLINE_VERSION:-}" ]; then
-	base="https://github.com/$repo/releases/download/$RAINBOW_STATUSLINE_VERSION"
-else
-	base="https://github.com/$repo/releases/latest/download"
-fi
-dir="${RAINBOW_STATUSLINE_DIR:-$HOME/.local/bin}"
-archive="${name}_${os}_${arch}.tar.gz"
+	secure="--proto =https --tlsv1.2"
+	if [ -n "${RAINBOW_STATUSLINE_BASE_URL:-}" ]; then
+		base="$RAINBOW_STATUSLINE_BASE_URL"
+		secure=""
+	elif [ -n "${RAINBOW_STATUSLINE_VERSION:-}" ]; then
+		base="https://github.com/$repo/releases/download/$RAINBOW_STATUSLINE_VERSION"
+	else
+		base="https://github.com/$repo/releases/latest/download"
+	fi
+	dir="${RAINBOW_STATUSLINE_DIR:-$HOME/.local/bin}"
+	archive="${name}_${os}_${arch}.tar.gz"
 
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT INT TERM
+	tmp="$(mktemp -d)"
+	trap 'rm -rf "$tmp" "$dir/$name.new"' EXIT
+	trap 'exit 1' INT TERM
 
-fetch() {
-	curl -fsSL -o "$tmp/$1" "$base/$1" ||
-		die "could not download $base/$1
-Anonymous download works only once the repository is public. For a private
-repository, use the GitHub CLI instead:
-  gh release download --repo $repo --pattern '${name}_${os}_${arch}.tar.gz' --pattern checksums.txt"
+	fetch() {
+		# $secure is left unquoted on purpose: it is two options or nothing.
+		# shellcheck disable=SC2086
+		curl -fsSL $secure -o "$tmp/$1" "$base/$1" ||
+			die "could not download $base/$1
+	Anonymous download works only once the repository is public. For a private
+	repository, use the GitHub CLI instead:
+	  gh release download --repo $repo --pattern '${name}_${os}_${arch}.tar.gz' --pattern checksums.txt"
+	}
+	fetch "$archive"
+	fetch checksums.txt
+
+	want="$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")"
+	[ -n "$want" ] || die "checksums.txt has no entry for $archive"
+	got="$(shasum -a 256 "$tmp/$archive" | awk '{ print $1 }')"
+	[ "$want" = "$got" ] || die "checksum mismatch for $archive (expected $want, got $got); nothing was installed"
+
+	tar -xzf "$tmp/$archive" -C "$tmp" "$name" || die "could not unpack $archive"
+	mkdir -p "$dir"
+	cp "$tmp/$name" "$dir/$name.new"
+	chmod 755 "$dir/$name.new"
+	# An unsigned download carries a quarantine flag that would stop it from running.
+	xattr -d com.apple.quarantine "$dir/$name.new" 2>/dev/null || true
+	mv -f "$dir/$name.new" "$dir/$name"
+
+	printf 'Installed %s\n' "$dir/$name"
+	case ":$PATH:" in
+	*":$dir:"*) ;;
+	*)
+		# shellcheck disable=SC2016 # the $PATH in the printed line must stay literal
+		printf '\n%s is not on your PATH. Add this line to your shell profile (for zsh, ~/.zshrc):\n  export PATH="%s:$PATH"\n' "$dir" "$dir"
+		;;
+	esac
+	printf '\nNext: run  %s  to set it up.\n' "$dir/$name"
 }
-fetch "$archive"
-fetch checksums.txt
 
-want="$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")"
-[ -n "$want" ] || die "checksums.txt has no entry for $archive"
-got="$(shasum -a 256 "$tmp/$archive" | awk '{ print $1 }')"
-[ "$want" = "$got" ] || die "checksum mismatch for $archive (expected $want, got $got); nothing was installed"
-
-tar -xzf "$tmp/$archive" -C "$tmp" "$name" || die "could not unpack $archive"
-mkdir -p "$dir"
-cp "$tmp/$name" "$dir/$name.new"
-chmod 755 "$dir/$name.new"
-# An unsigned download carries a quarantine flag that would stop it from running.
-xattr -d com.apple.quarantine "$dir/$name.new" 2>/dev/null || true
-mv -f "$dir/$name.new" "$dir/$name"
-
-printf 'Installed %s\n' "$dir/$name"
-case ":$PATH:" in
-*":$dir:"*) ;;
-*)
-	# shellcheck disable=SC2016 # the $PATH in the printed line must stay literal
-	printf '\n%s is not on your PATH. Add this line to your shell profile (for zsh, ~/.zshrc):\n  export PATH="%s:$PATH"\n' "$dir" "$dir"
-	;;
-esac
-printf '\nNext: run  %s  to set it up.\n' "$dir/$name"
+main "$@"

@@ -12,15 +12,19 @@ RAINBOW_STATUSLINE_BASE_URL=file://$PWD/dist RAINBOW_STATUSLINE_DIR=$(mktemp -d)
 
 ## Homebrew and Scoop
 
-GoReleaser no longer generates Homebrew formulae (`brews` is deprecated), so the tap gets a cask with a `binary` stanza and a quarantine-removal step. Install is `brew install --cask milczarekIT/tap/rainbow-statusline`.
+Homebrew gets a plain formula, `brew install milczarekIT/tap/rainbow-statusline`. A cask would be wrong here: a cask download is quarantined, and an unsigned binary is then blocked by Gatekeeper, so the status line would silently never draw.
 
-Both packages publish to repositories that do not exist yet: `milczarekIT/homebrew-tap` and `milczarekIT/scoop-bucket`. Until the repository variable `PUBLISH_PACKAGES` is `true`, the workflow runs GoReleaser with `--skip=homebrew,scoop` and only the GitHub release is made. To enable them:
+GoReleaser deprecates `brews` (and so `goreleaser check` exits non-zero with "DEPRECATED: brews"), but the version pinned in `release.yml` (v2.19.0) still renders a formula from it. The workflow does not run `goreleaser check`. When GoReleaser removes `brews` in a major version, either stay on v2.x or replace it with a formula generated in the workflow from a template kept in the repository.
+
+Both packages publish to repositories that do not exist yet: `milczarekIT/homebrew-tap` and `milczarekIT/scoop-bucket`. Until the repository variable `PUBLISH_PACKAGES` is `true`, the workflow's first step runs GoReleaser with `--skip=homebrew,scoop` and only the GitHub release is made. To enable them:
 
 1. Create the two repositories (each with a README or an initial commit).
 2. Create a token with `contents: write` on each, and store them as the repository secrets `HOMEBREW_TAP_TOKEN` and `SCOOP_BUCKET_TOKEN`.
 3. Set the repository variable `PUBLISH_PACKAGES` to `true`.
 
 `skip_upload: auto` additionally keeps pre-release tags (for example `v1.0.0-rc.1`) out of both repositories.
+
+The workflow pins its actions by commit SHA and GoReleaser by exact version; update them deliberately.
 
 ## Pre-release while the repository is private
 
@@ -34,8 +38,13 @@ gh release download v0.1.0-rc.1 --repo milczarekIT/rainbow-statusline --dir /tmp
 
 The anonymous paths (`curl`, `irm`, `brew`, `scoop`) can only be verified once the repository is public.
 
-## Open items for publication
+## Publication checklist
 
-- Add a `LICENSE` file (and a license section in the README).
+Not done yet; the owner does these before the repository goes public:
+
+- Add a `LICENSE` file and a license section in the README.
+- Move or remove `docs/windows-steps.md` and `docs/superpowers/`.
+- Neutralise the "owner" wording in `docs/discovery.md`.
+- Decide which commit author e-mail should appear in the public history.
 - Verify `install.ps1` and the Scoop manifest on Windows; `install.ps1` has not been run on any system yet.
-- Verify the cask's `postflight_steps` on a real `brew install --cask`.
+- Run a real `brew install milczarekIT/tap/rainbow-statusline` from the tap once it exists.

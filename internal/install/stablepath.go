@@ -35,17 +35,34 @@ func stableExecutable() (string, error) {
 }
 
 func stablePath(exe string) string {
-	if goos == "windows" {
-		if i := strings.Index(strings.ToLower(exe), `\apps\`); i >= 0 {
-			shim := exe[:i] + `\shims` + exe[strings.LastIndex(exe, `\`):]
-			if fileExists(shim) {
-				return shim
-			}
-		}
+	if shim, ok := scoopShim(exe); ok && fileExists(shim) {
+		return shim
 	}
 	name := exe[strings.LastIndexAny(exe, `/\`)+1:]
 	if found, err := lookPath(name); err == nil && sameFile(found, exe) {
 		return found
 	}
 	return exe
+}
+
+// scoopShim maps <root>\apps\rainbow-statusline\<version>\rainbow-statusline.exe
+// to <root>\shims\rainbow-statusline.exe. Any other layout has no shim.
+func scoopShim(exe string) (string, bool) {
+	const program = "rainbow-statusline.exe"
+	if goos != "windows" {
+		return "", false
+	}
+	parts := strings.Split(exe, `\`)
+	n := len(parts)
+	if n < 5 {
+		return "", false
+	}
+	root := strings.Join(parts[:n-4], `\`)
+	if root == "" || parts[n-2] == "" ||
+		!strings.EqualFold(parts[n-4], "apps") ||
+		!strings.EqualFold(parts[n-3], "rainbow-statusline") ||
+		!strings.EqualFold(parts[n-1], program) {
+		return "", false
+	}
+	return root + `\shims\` + program, true
 }

@@ -78,3 +78,27 @@ func TestStablePathUsesPathLookupOnWindows(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestStablePathScoopLayoutIsCaseInsensitiveAndNonASCII(t *testing.T) {
+	shim := `D:\Użytkownik İ\Scoop\shims\rainbow-statusline.exe`
+	stubPath(t, "windows", nil, never, shim)
+	got := stablePath(`D:\Użytkownik İ\Scoop\APPS\Rainbow-Statusline\1.0.0\rainbow-statusline.exe`)
+	if got != shim {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestStablePathScoopShimNeedsTheRealLayout(t *testing.T) {
+	for _, exe := range []string{
+		`C:\tools\apps\rainbow-statusline.exe`,
+		`C:\Users\me\apps\other\1.0.0\rainbow-statusline.exe`,
+		`C:\Users\me\apps\rainbow-statusline\1.0.0\other.exe`,
+		`C:\Users\me\apps\rainbow-statusline\1.0.0\bin\rainbow-statusline.exe`,
+		`\apps\rainbow-statusline\1.0.0\rainbow-statusline.exe`,
+	} {
+		stubPath(t, "windows", nil, never, `\shims\rainbow-statusline.exe`, `C:\Users\me\shims\rainbow-statusline.exe`, `C:\tools\shims\rainbow-statusline.exe`)
+		if got := stablePath(exe); got != exe {
+			t.Errorf("%s: got %q", exe, got)
+		}
+	}
+}

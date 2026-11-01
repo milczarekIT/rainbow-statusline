@@ -16,10 +16,10 @@ macOS and Windows are supported. Linux is not promised.
 
 | System | Command |
 |---|---|
-| macOS, Homebrew | `brew install --cask milczarekIT/tap/rainbow-statusline` |
+| macOS, Homebrew | `brew install milczarekIT/tap/rainbow-statusline` |
 | macOS, script | `curl -fsSL https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.sh \| sh` |
-| Windows, Scoop | `scoop bucket add milczarekIT https://github.com/milczarekIT/scoop-bucket` then `scoop install rainbow-statusline` |
-| Windows, script | `irm https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.ps1 \| iex` |
+| Windows, Scoop (not yet tested) | `scoop bucket add milczarekIT https://github.com/milczarekIT/scoop-bucket` then `scoop install rainbow-statusline` |
+| Windows, script (not yet tested) | `irm https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.ps1 \| iex` |
 | Either | download the archive for your system from the GitHub Releases page and put `rainbow-statusline` on your PATH |
 
 These commands download from GitHub without signing in, so they work only while the repository is public. For a private copy, sign in with the GitHub CLI and download the release yourself:
@@ -28,7 +28,7 @@ These commands download from GitHub without signing in, so they work only while 
 gh release download --repo milczarekIT/rainbow-statusline --pattern 'rainbow-statusline_*' --pattern checksums.txt
 ```
 
-The scripts check the download against `checksums.txt` before installing and refuse on a mismatch. They install for the current user only (`~/.local/bin` on macOS, `%LOCALAPPDATA%\Programs\rainbow-statusline` on Windows), never use sudo, and tell you what to do about PATH: on macOS they print the line to add to your shell profile, on Windows they add the folder to your user PATH and say so.
+The scripts check the download against `checksums.txt` before installing and refuse on a mismatch. The checksum protects against a corrupted or truncated download, not against a compromised release: the checksum file comes from the same place as the archive. They install for the current user only (`~/.local/bin` on macOS, `%LOCALAPPDATA%\Programs\rainbow-statusline` on Windows), never use sudo, and tell you what to do about PATH: on macOS they print the line to add to your shell profile, on Windows they add the folder to your user PATH and say so.
 
 ## First run
 
@@ -51,7 +51,7 @@ The first time, a short guide lists the assistants it finds, lets you pick which
 | Session cost | yes | yes | — (no USD cost) |
 | Cache read / write | yes | yes | yes (totals) |
 | Cache timer | yes | estimated (`⏱ ~`) | — |
-| Ponytail, Caveman | yes | yes | not verified |
+| Ponytail, Caveman | yes | yes | never shown |
 | RTK, claude-mem session `c:` | yes | yes | — |
 | RTK, claude-mem total `t:` | yes | yes | from the machine-wide data, when installed |
 | macOS | verified | verified | verified |
@@ -94,7 +94,7 @@ rainbow-statusline uninstall
 It removes only the entries it added to your assistants' settings and restores the status line you had before. Then remove the package:
 
 ```
-brew uninstall --cask rainbow-statusline     # macOS, Homebrew
+brew uninstall rainbow-statusline            # macOS, Homebrew
 scoop uninstall rainbow-statusline           # Windows, Scoop
 ```
 
