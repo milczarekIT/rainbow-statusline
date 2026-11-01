@@ -154,6 +154,24 @@ Questions to answer from this stage:
 2. Does `copilot help config` on Windows still describe `statusLine` and `cmd.exe`? (`copilot help config | Select-String statusLine`)
 3. If you use Ponytail, Caveman, RTK or claude-mem with Copilot: where does each keep data on Windows? (Same two `Get-ChildItem` searches as stage 1, plus `Get-ChildItem $HOME\.copilot -Recurse -Depth 2`.)
 
+## Stage 4b: paths the installer must survive
+
+Working directory: `C:\dev\rainbow-statusline`. Needs a build of the binary (`go build -o $env:TEMP\rs.exe .\cmd\rainbow-statusline`). Run in a temporary profile: the installer must not touch your real settings during this check. Quoting is only tested as text on the Mac, so this stage is what proves it.
+
+1. Which shell does Claude Code use for the status line? Point a test `statusLine` command (via `claude --settings <file>`) at `echo %COMSPEC% $BASH_VERSION` and report what it draws: a `cmd.exe` path means cmd.exe, a version number means Git Bash.
+2. Copy `rs.exe` to `C:\Program Files (x86)\rs-test\rainbow-statusline.exe` and to a UNC path such as `\\localhost\C$\rs-test\rainbow-statusline.exe`. Note: a real install refuses a `$` path, so for the UNC case use a share without `$`, e.g. `New-SmbShare -Name rstest -Path C:\rs-test` and `\\localhost\rstest\rainbow-statusline.exe`. Run each, quoted the way the installer writes it, under both shells, with sample input on stdin:
+
+   ```
+   Get-Content testdata\claude\session-after-reply.json | cmd /d /s /c '"C:\Program Files (x86)\rs-test\rainbow-statusline.exe" --agent claude'
+   Get-Content testdata\claude\session-after-reply.json | cmd /c '"C:\Program Files (x86)\rs-test\rainbow-statusline.exe" --agent claude'
+   Get-Content testdata\claude\session-after-reply.json | bash -c '"C:\Program Files (x86)\rs-test\rainbow-statusline.exe" --agent claude'
+   Get-Content testdata\claude\session-after-reply.json | cmd /d /s /c '"\\localhost\rstest\rainbow-statusline.exe" --agent claude'
+   Get-Content testdata\claude\session-after-reply.json | bash -c '"\\localhost\rstest\rainbow-statusline.exe" --agent claude'
+   ```
+
+   Expected: each prints a status line. Report any that does not; the UNC form under bash is the most likely to fail, because bash collapses `\\`.
+3. In live OpenCode with a temporary `XDG_CONFIG_HOME`, copy the plugin to `C:\rs-test\Łukasz K\tui.tsx` and list it in `tui.json` as `file:///C:/rs-test/%C5%81ukasz%20K/tui.tsx`. Expected: the bar appears. If it does not, try the unencoded form and report which one loads. Repeat on the Mac with a path holding a space and `Ł`.
+
 ## Stage 5: send back
 
 Send the contents of these (all scrubbed; do not send `raw\`):
@@ -165,7 +183,7 @@ Get-Content C:\dev\rs-collected\info.txt
 
 - `C:\dev\rs-collected\scrubbed\*.json`
 - `C:\dev\rs-collected\info.txt`
-- the answers: Stage 1 missing paths, Stage 2 what the status line showed, Stage 3 flash yes or no and the `probe.log` lines, Stage 4 questions 1 to 3.
+- the answers: Stage 1 missing paths, Stage 2 what the status line showed, Stage 3 flash yes or no and the `probe.log` lines, Stage 4 questions 1 to 3, Stage 4b the shell Claude Code uses, which commands failed, and which plugin URL form loaded.
 
 Before sending, confirm no personal data is left (expected: no output):
 

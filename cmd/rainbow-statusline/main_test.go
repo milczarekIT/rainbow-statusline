@@ -132,3 +132,23 @@ func TestUninstallSubcommand(t *testing.T) {
 		t.Errorf("code %d, stderr %q", code, errOut.String())
 	}
 }
+
+type panicWriter struct{}
+
+func (panicWriter) Write([]byte) (int, error) { panic("boom") }
+
+func TestRunUninstallTurnsPanicIntoExitOne(t *testing.T) {
+	home := t.TempDir()
+	for _, k := range []string{"XDG_CONFIG_HOME", "COPILOT_HOME", "CLAUDE_CONFIG_DIR"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	old := config.ConfigDir
+	config.ConfigDir = func() (string, error) { return filepath.Join(home, "cfg"), nil }
+	t.Cleanup(func() { config.ConfigDir = old })
+	var errOut bytes.Buffer
+	if code := runUninstall(panicWriter{}, &errOut); code != 1 || !strings.Contains(errOut.String(), "boom") {
+		t.Errorf("code %d, stderr %q", code, errOut.String())
+	}
+}

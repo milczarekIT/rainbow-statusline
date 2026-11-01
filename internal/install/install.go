@@ -38,6 +38,8 @@ var Report io.Writer = io.Discard
 var (
 	executable = os.Executable
 	goos       = runtime.GOOS
+
+	beforeStateSave = func() {}
 )
 
 const (
@@ -50,10 +52,11 @@ const (
 type record struct {
 	Agent, Kind string
 	Existed     bool
-	Original    []byte // bytes before our first install; a reinstall keeps them
-	Previous    string // raw JSON of the value we replaced; empty when there was none
-	Entry       string // our command, or our tui.json URL
-	WroteHash   string // hash of the bytes we wrote; empty once the user's edits are mixed in
+	Original    []byte   // bytes before our first install; a reinstall keeps them
+	Previous    []byte   // raw JSON of the value we replaced; empty when there was none
+	Entry       string   // our command, or our tui.json URL
+	WroteHash   string   // hash of the bytes we wrote; empty once the user's edits are mixed in
+	Dirs        []string // folders we created for this file, deepest first
 }
 
 type state struct {
@@ -75,7 +78,7 @@ type action struct {
 	write  bool
 	next   []byte
 	remove bool
-	ownDir bool // the file's folder is ours: drop it once empty
+	dirs   []string // folders that go with the file, once empty
 	record func(*state)
 	note   string
 }
@@ -130,7 +133,7 @@ func Apply(changes []Change) error {
 			return fmt.Errorf("%s: not part of the %s install", c.Path, c.Agent)
 		}
 	}
-	return commit(actions, st)
+	return commit(actions, st, false)
 }
 
 // Uninstall undoes every recorded install. It restores the original bytes where
@@ -142,8 +145,7 @@ func Uninstall() error {
 		return err
 	}
 	if len(st.Records) == 0 {
-		fmt.Fprintln(Report, "nothing to uninstall")
-		return nil
+		return uninstallWithoutRecords(st)
 	}
 	paths := make([]string, 0, len(st.Records))
 	for p := range st.Records {
@@ -160,13 +162,96 @@ func Uninstall() error {
 		a.record = func(s *state) { delete(s.Records, p) }
 		actions = append(actions, a)
 	}
-	if err := commit(actions, st); err != nil {
+	if err := commit(actions, st, true); err != nil {
 		return err
 	}
+	report(actions)
+	return nil
+}
+
+// uninstallWithoutRecords handles a lost state: it looks for our entries where
+// an install would have put them and takes out only those.
+func uninstallWithoutRecords(st *state) error {
+	actions, err := findLost()
+	if err != nil {
+		return err
+	}
+	if len(actions) == 0 {
+		fmt.Fprintln(Report, "nothing to uninstall")
+		return nil
+	}
+	if err := commit(actions, st, true); err != nil {
+		return err
+	}
+	dir, err := stateDir()
+	if err != nil {
+		return err
+	}
+	for i := range actions {
+		if actions[i].write || actions[i].remove {
+			actions[i].note += "; no original was available, earlier copies may be in " + filepath.Join(dir, "backups")
+		}
+	}
+	report(actions)
+	return nil
+}
+
+func findLost() ([]action, error) {
+	var out []action
+	add := func(path string, rec *record) error {
+		a, err := undo(path, rec)
+		if err != nil {
+			return err
+		}
+		a.record = func(*state) {}
+		out = append(out, a)
+		return nil
+	}
+	for _, d := range definitions() {
+		path := filepath.Join(d.dir(), d.settings)
+		raw, err := os.ReadFile(path)
+		// A file that never mentions us is none of our business, whatever its format.
+		mentioned := err == nil && bytes.Contains(raw, []byte("rainbow-statusline"))
+		if d.id == "opencode" {
+			file := openCodePluginPath()
+			if mentioned {
+				if url := fileURL(goos, file); bytes.Contains(raw, []byte(url)) {
+					if err := add(path, &record{Agent: d.id, Kind: kindTUI, Existed: true, Entry: url}); err != nil {
+						return nil, err
+					}
+				}
+			}
+			if cur, err := os.ReadFile(file); err == nil {
+				rec := &record{Agent: d.id, Kind: kindPlugin, Dirs: []string{filepath.Dir(file)}}
+				if isOurPlugin(cur) {
+					rec.WroteHash = hash(cur)
+				}
+				if err := add(file, rec); err != nil {
+					return nil, err
+				}
+			}
+			continue
+		}
+		if !mentioned {
+			continue
+		}
+		if !json.Valid(raw) {
+			_, err := readSettings(path, "statusLine")
+			return nil, err
+		}
+		if cmd := gjson.GetBytes(raw, "statusLine.command").String(); isOurCommand(cmd, d.id) {
+			if err := add(path, &record{Agent: d.id, Kind: kindStatusLine, Existed: true, Entry: cmd}); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
+}
+
+func report(actions []action) {
 	for _, a := range actions {
 		fmt.Fprintf(Report, "%s: %s\n", a.Path, a.note)
 	}
-	return nil
 }
 
 func prepare(id string, st *state) ([]action, error) {
@@ -186,21 +271,46 @@ func prepare(id string, st *state) ([]action, error) {
 	return nil, fmt.Errorf("unknown assistant %q", id)
 }
 
-func undo(path string, rec *record) (action, error) {
+func undo(path string, rec *record) (a action, err error) {
 	switch rec.Kind {
 	case kindStatusLine:
-		return undoStatusLine(path, rec)
+		a, err = undoStatusLine(path, rec)
 	case kindTUI:
-		return undoTUI(path, rec)
+		a, err = undoTUI(path, rec)
 	case kindPlugin:
-		return undoPlugin(path, rec)
+		a, err = undoPlugin(path, rec)
+	default:
+		err = fmt.Errorf("%s: unknown record kind %q", path, rec.Kind)
 	}
-	return action{}, fmt.Errorf("%s: unknown record kind %q", path, rec.Kind)
+	a.dirs = rec.Dirs
+	return a, err
 }
 
-// commit backs up, saves the state, then writes each file. A failure restores
-// the files already changed and the state. Backups stay.
-func commit(actions []action, st *state) error {
+// missingDirs lists the folders writing path would have to create, deepest first.
+func missingDirs(path string) []string {
+	var out []string
+	for d := filepath.Dir(path); ; d = filepath.Dir(d) {
+		if _, err := os.Stat(d); !os.IsNotExist(err) || d == filepath.Dir(d) {
+			return out
+		}
+		out = append(out, d)
+	}
+}
+
+// removeDirs drops the folders that are empty; os.Remove refuses the others.
+func removeDirs(dirs []string) {
+	for _, d := range dirs {
+		_ = os.Remove(d)
+	}
+}
+
+// commit backs up and writes each file. A failure restores the files already
+// changed and the state; backups stay.
+//
+// Install saves the state before the files and uninstall after them, so a kill
+// at any point leaves records a rerun of uninstall can finish from: a record
+// whose entry is not in the file is reported and dropped.
+func commit(actions []action, st *state, stateLast bool) error {
 	var writes []action
 	for _, a := range actions {
 		a.record(st)
@@ -215,20 +325,37 @@ func commit(actions []action, st *state) error {
 			}
 		}
 	}
-	restoreState, err := saveState(st)
-	if err != nil {
-		return err
+	restoreState := func() error { return nil }
+	var err error
+	if !stateLast {
+		if restoreState, err = saveState(st); err != nil {
+			return err
+		}
 	}
 	for i, a := range writes {
 		if err := perform(a); err != nil {
 			err = fmt.Errorf("%s: %w", a.Path, err)
-			for _, done := range writes[:i] {
-				err = errors.Join(err, restore(done))
+			if !a.cur.exists {
+				removeDirs(a.dirs)
 			}
-			return errors.Join(err, restoreState())
+			return errors.Join(err, restoreAll(writes[:i]), restoreState())
+		}
+	}
+	if stateLast {
+		beforeStateSave()
+		if _, err := saveState(st); err != nil {
+			return errors.Join(err, restoreAll(writes))
 		}
 	}
 	return nil
+}
+
+func restoreAll(done []action) error {
+	var err error
+	for _, a := range done {
+		err = errors.Join(err, restore(a))
+	}
+	return err
 }
 
 func perform(a action) error {
@@ -236,9 +363,7 @@ func perform(a action) error {
 		if err := os.Remove(a.Path); err != nil {
 			return err
 		}
-		if a.ownDir {
-			_ = os.Remove(filepath.Dir(a.Path)) // refuses when not empty
-		}
+		removeDirs(a.dirs)
 		return nil
 	}
 	mode := fs.FileMode(0o644)
@@ -254,9 +379,7 @@ func restore(a action) error {
 		err = atomicWrite(a.Path, a.cur.bytes, a.cur.mode)
 	} else {
 		err = os.Remove(a.Path)
-		if a.ownDir {
-			_ = os.Remove(filepath.Dir(a.Path))
-		}
+		removeDirs(a.dirs)
 	}
 	if err != nil {
 		return fmt.Errorf("%s: could not restore it, see the backups: %w", a.Path, err)
@@ -323,12 +446,15 @@ func loadState() (*state, error) {
 	if st.Records == nil {
 		st.Records = map[string]*record{}
 	}
+	for path, rec := range st.Records {
+		if rec == nil {
+			return nil, fmt.Errorf("%s: corrupt, no record for %s", p, path)
+		}
+	}
 	return st, nil
 }
 
-// saveState writes the state before any file changes, so a crash can never
-// leave our entry in a file with no record of what it replaced. The returned
-// function puts the old state back.
+// saveState writes the state. The returned function puts the old one back.
 func saveState(st *state) (func() error, error) {
 	dir, err := stateDir()
 	if err != nil {
@@ -421,6 +547,9 @@ func readSettings(path, key string) (target, error) {
 	t, err := readTarget(path)
 	if err != nil || !t.exists {
 		return t, err
+	}
+	if bytes.HasPrefix(t.bytes, []byte("\xef\xbb\xbf")) {
+		return t, fmt.Errorf("%s: starts with a byte order mark (BOM); save it as UTF-8 without BOM and try again", path)
 	}
 	if !json.Valid(t.bytes) {
 		return t, fmt.Errorf("%s: not valid JSON (comments are not supported); fix it and try again", path)

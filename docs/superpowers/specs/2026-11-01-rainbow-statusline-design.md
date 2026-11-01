@@ -113,7 +113,7 @@ OpenCode nie potrafi uruchomić polecenia paska, więc mały plugin zostaje, ale
 Propozycja autora, właściciel nie zgłosił uwag:
 
 - **Blokuje:** Claude Code nie działa na którymś systemie albo pasek nie działa w ogóle w Copilot CLI.
-- **Nie blokuje:** wymagana flaga eksperymentalna w Copilocie (instalator ją ustawia), brak danych pluginów w Copilocie (`—`), problemy OpenCode na Windows (ta kombinacja dostaje status „jeszcze nie”). README podaje, co działa gdzie.
+- **Nie blokuje:** brak danych pluginów w Copilocie (`—`), problemy OpenCode na Windows (ta kombinacja dostaje status „jeszcze nie”). README podaje, co działa gdzie.
 
 ## Środowisko testowe
 

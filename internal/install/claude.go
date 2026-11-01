@@ -43,7 +43,7 @@ func prepareStatusLine(id, path, bin string, st *state) ([]action, error) {
 	same := prevCmd == cmd
 	ours := rec != nil && prevCmd == rec.Entry
 
-	a := action{Change: Change{Agent: id, Path: path, Summary: "already set: " + cmd}, cur: cur, write: true, next: raw}
+	a := action{Change: Change{Agent: id, Path: path, Summary: "already set: " + cmd}, cur: cur, write: true, next: raw, dirs: missingDirs(path)}
 	if !same {
 		entry := `{"type":"command","command":` + jsonString(cmd) + `,"padding":0,"refreshInterval":1}`
 		if a.next, err = setKey(raw, "statusLine", entry); err != nil {
@@ -57,13 +57,13 @@ func prepareStatusLine(id, path, bin string, st *state) ([]action, error) {
 	a.record = func(s *state) {
 		switch {
 		case rec == nil && same: // state was lost: our entry is there, the original is not known
-			s.Records[path] = &record{Agent: id, Kind: kindStatusLine, Existed: cur.exists, Original: cur.bytes, Entry: cmd}
+			s.Records[path] = &record{Agent: id, Kind: kindStatusLine, Existed: cur.exists, Original: cur.bytes, Entry: cmd, Dirs: a.dirs}
 		case rec == nil:
-			s.Records[path] = &record{Agent: id, Kind: kindStatusLine, Existed: cur.exists, Original: cur.bytes, Previous: prev.Raw, Entry: cmd, WroteHash: hash(a.next)}
+			s.Records[path] = &record{Agent: id, Kind: kindStatusLine, Existed: cur.exists, Original: cur.bytes, Previous: []byte(prev.Raw), Entry: cmd, WroteHash: hash(a.next), Dirs: a.dirs}
 		case !same:
 			rec.WroteHash = nextHash(rec, cur, a.next)
 			if !ours {
-				rec.Previous = prev.Raw
+				rec.Previous = []byte(prev.Raw)
 			}
 			rec.Entry = cmd
 		}
@@ -101,8 +101,8 @@ func undoStatusLine(path string, rec *record) (action, error) {
 		return a, nil
 	}
 	a.write = true
-	if rec.Previous != "" {
-		a.next, err = sjson.SetRawBytes(a.cur.bytes, "statusLine", []byte(rec.Previous))
+	if len(rec.Previous) > 0 {
+		a.next, err = sjson.SetRawBytes(a.cur.bytes, "statusLine", rec.Previous)
 		a.note = "our status line removed, the previous one is back"
 	} else {
 		a.next, err = sjson.DeleteBytes(a.cur.bytes, "statusLine")
@@ -139,15 +139,30 @@ func statusLineText(v gjson.Result) string {
 
 var plainArg = regexp.MustCompile(`^[A-Za-z0-9_@%+=:,./-]+$`)
 
+var ourCommand = regexp.MustCompile(`^(?:"([^"]+)"|'((?:[^']|'\\'')+)'|(\S+)) --agent (\S+)$`)
+
+// isOurCommand recognises a command shellCommand wrote, without a record of it.
+func isOurCommand(cmd, id string) bool {
+	m := ourCommand.FindStringSubmatch(cmd)
+	if m == nil || m[4] != id {
+		return false
+	}
+	name := m[1] + m[2] + m[3]
+	name = name[strings.LastIndexAny(name, `/\`)+1:]
+	return name == "rainbow-statusline" || name == "rainbow-statusline.exe"
+}
+
 // shellCommand builds the command line for the shell the assistant runs it
 // with: sh on Unix, cmd.exe on Windows.
 func shellCommand(goos, path string, args ...string) (string, error) {
 	parts := make([]string, 0, len(args)+1)
 	if goos == "windows" {
-		// cmd.exe expands %VAR% even inside quotes, and on a /c line there is no escape.
+		// cmd.exe expands %VAR% even inside quotes, and a bare cmd /c drops the quotes
+		// around a string with & and the like. Git Bash, which may run this instead,
+		// executes $(...) and backticks inside double quotes.
 		for _, s := range append([]string{path}, args...) {
-			if strings.ContainsAny(s, "%\"\r\n") {
-				return "", fmt.Errorf("cmd.exe cannot run %q safely: move it to a folder without %%, quotes or line breaks", s)
+			if strings.ContainsAny(s, "%\"\r\n$`&|<>^!") {
+				return "", fmt.Errorf("cannot run %q safely: move it to a folder without any of %% \" $ ` & | < > ^ ! or line breaks", s)
 			}
 		}
 		parts = append(parts, `"`+path+`"`)

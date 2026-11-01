@@ -25,9 +25,22 @@ func defaultOpenCodeDir() string {
 	return filepath.Join(h, ".config", "opencode")
 }
 
+func openCodePluginPath() string {
+	return filepath.Join(defaultOpenCodeDir(), "plugins", "rainbow-statusline", "tui.tsx")
+}
+
+var pinnedBin = regexp.MustCompile(`const INSTALLED_BIN = "(?:[^"\\]|\\.)*"`)
+
+// isOurPlugin reports whether content is the bundled plugin with a binary path
+// pinned, which is all an install changes.
+func isOurPlugin(content []byte) bool {
+	src, err := plugin.OpenCodeFiles.ReadFile("opencode/tui.tsx")
+	return err == nil && string(pinnedBin.ReplaceAll(content, []byte(binMarker))) == string(src)
+}
+
 func prepareOpenCode(bin string, st *state) ([]action, error) {
 	dir := defaultOpenCodeDir()
-	file := filepath.Join(dir, "plugins", "rainbow-statusline", "tui.tsx")
+	file := openCodePluginPath()
 	copied, err := preparePluginFile(file, bin, st)
 	if err != nil {
 		return nil, err
@@ -53,13 +66,13 @@ func preparePluginFile(path, bin string, st *state) (action, error) {
 		return action{}, err
 	}
 	rec := st.Records[path]
-	a := action{Change: Change{Agent: "opencode", Path: path, Summary: "copy the plugin"}, cur: cur, write: true, next: next, ownDir: true}
+	a := action{Change: Change{Agent: "opencode", Path: path, Summary: "copy the plugin"}, cur: cur, write: true, next: next, dirs: missingDirs(path)}
 	if cur.exists && rec == nil {
 		a.Summary = "replace the file already here with the plugin (it is backed up)"
 	}
 	a.record = func(s *state) {
 		if rec == nil {
-			s.Records[path] = &record{Agent: "opencode", Kind: kindPlugin, Existed: cur.exists, Original: cur.bytes, WroteHash: hash(next)}
+			s.Records[path] = &record{Agent: "opencode", Kind: kindPlugin, Existed: cur.exists, Original: cur.bytes, WroteHash: hash(next), Dirs: a.dirs}
 			return
 		}
 		rec.WroteHash = hash(next)
@@ -68,7 +81,7 @@ func preparePluginFile(path, bin string, st *state) (action, error) {
 }
 
 func undoPlugin(path string, rec *record) (action, error) {
-	a := action{Change: Change{Agent: rec.Agent, Path: path}, ownDir: true}
+	a := action{Change: Change{Agent: rec.Agent, Path: path}}
 	var err error
 	if a.cur, err = readTarget(path); err != nil {
 		return a, err
@@ -94,7 +107,7 @@ func prepareTUI(path, entry string, st *state) (action, error) {
 	}
 	list := gjson.GetBytes(raw, "plugin")
 	rec := st.Records[path]
-	a := action{Change: Change{Agent: "opencode", Path: path, Summary: "already lists the plugin"}, cur: cur, write: true, next: raw}
+	a := action{Change: Change{Agent: "opencode", Path: path, Summary: "already lists the plugin"}, cur: cur, write: true, next: raw, dirs: missingDirs(path)}
 	has := listed(list, entry)
 	if !has {
 		elems := []string{}
@@ -110,9 +123,9 @@ func prepareTUI(path, entry string, st *state) (action, error) {
 	a.record = func(s *state) {
 		switch {
 		case rec == nil && has:
-			s.Records[path] = &record{Agent: "opencode", Kind: kindTUI, Existed: cur.exists, Original: cur.bytes, Previous: list.Raw, Entry: entry}
+			s.Records[path] = &record{Agent: "opencode", Kind: kindTUI, Existed: cur.exists, Original: cur.bytes, Previous: []byte(list.Raw), Entry: entry, Dirs: a.dirs}
 		case rec == nil:
-			s.Records[path] = &record{Agent: "opencode", Kind: kindTUI, Existed: cur.exists, Original: cur.bytes, Previous: list.Raw, Entry: entry, WroteHash: hash(a.next)}
+			s.Records[path] = &record{Agent: "opencode", Kind: kindTUI, Existed: cur.exists, Original: cur.bytes, Previous: []byte(list.Raw), Entry: entry, WroteHash: hash(a.next), Dirs: a.dirs}
 		case !has:
 			rec.WroteHash = nextHash(rec, cur, a.next)
 			rec.Entry = entry
@@ -149,7 +162,7 @@ func undoTUI(path string, rec *record) (action, error) {
 		}
 	}
 	a.write, a.note = true, "our plugin entry removed"
-	if len(elems) == 0 && rec.Previous == "" {
+	if len(elems) == 0 && len(rec.Previous) == 0 {
 		a.next, err = sjson.DeleteBytes(a.cur.bytes, "plugin")
 	} else {
 		a.next, err = sjson.SetRawBytes(a.cur.bytes, "plugin", []byte(rebuildArray(list.Raw, elems)))

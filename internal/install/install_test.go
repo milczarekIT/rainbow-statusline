@@ -732,7 +732,7 @@ func TestCommandWithSpaces(t *testing.T) {
 		args             []string
 	}{
 		{"windows", `C:\Users\Łukasz K\bin\rainbow-statusline.exe`, `"C:\Users\Łukasz K\bin\rainbow-statusline.exe" --agent claude`, []string{"--agent", "claude"}},
-		{"windows", `C:\a&b (x)\r.exe`, `"C:\a&b (x)\r.exe" --agent copilot`, []string{"--agent", "copilot"}},
+		{"windows", `C:\Program Files (x86)\r.exe`, `"C:\Program Files (x86)\r.exe" --agent copilot`, []string{"--agent", "copilot"}},
 		{"windows", `C:\plain\r.exe`, `"C:\plain\r.exe" "a b"`, []string{"a b"}},
 		{"darwin", "/Users/Łukasz K/bin/rainbow-statusline", `'/Users/Łukasz K/bin/rainbow-statusline' --agent claude`, []string{"--agent", "claude"}},
 		{"darwin", "/opt/bin/rs", "/opt/bin/rs --agent claude", []string{"--agent", "claude"}},
@@ -744,7 +744,9 @@ func TestCommandWithSpaces(t *testing.T) {
 		}
 	}
 	// cmd.exe expands %VAR% inside quotes and has no escape on a /c command line.
-	for _, bad := range []string{`C:\100%\r.exe`, `C:\a"b\r.exe`, "C:\\a\nb\\r.exe"} {
+	// Git Bash runs $(...) and backticks inside double quotes; a bare cmd /c drops
+	// the quotes around a string with & and the like.
+	for _, bad := range []string{`C:\100%\r.exe`, `C:\a"b\r.exe`, "C:\\a\nb\\r.exe", `C:\$(x)\r.exe`, "C:\\`x`\\r.exe", `C:\a&b\r.exe`, `C:\a|b\r.exe`, `C:\a<b\r.exe`, `C:\a>b\r.exe`, `C:\a^b\r.exe`, `C:\a!b\r.exe`} {
 		if got, err := shellCommand("windows", bad, "--agent", "claude"); err == nil {
 			t.Errorf("%q accepted as %q", bad, got)
 		}
@@ -782,5 +784,252 @@ func TestQuotedCommandRunsInSh(t *testing.T) {
 	out, err := exec.Command("/bin/sh", "-c", cmd).CombinedOutput()
 	if err != nil || string(out) != "ran --agent claude\n" {
 		t.Errorf("%q: %q, %v", cmd, out, err)
+	}
+}
+
+func stateFile(home string) string {
+	return filepath.Join(home, "cfg", "rainbow-statusline", "state", "state.json")
+}
+
+func TestUninstallWithLostStateRemovesOurEntry(t *testing.T) {
+	for name, st := range map[string]*string{"missing": nil, "null": ptr("null"), "no records": ptr(`{"Records":{}}`)} {
+		t.Run(name, func(t *testing.T) {
+			home := sandbox(t)
+			claude := filepath.Join(home, ".claude", "settings.json")
+			tui := filepath.Join(home, ".config", "opencode", "tui.json")
+			file := filepath.Join(home, ".config", "opencode", "plugins", "rainbow-statusline", "tui.tsx")
+			put(t, claude, "{\n  \"a\": 1\n}\n")
+			put(t, tui, `{"plugin":["other"]}`)
+			install(t, "claude", "opencode")
+			if err := os.Remove(stateFile(home)); err != nil {
+				t.Fatal(err)
+			}
+			if st != nil {
+				put(t, stateFile(home), *st)
+			}
+			out := uninstall(t)
+			if got := get(t, claude); got != "{\n  \"a\": 1\n}\n" {
+				t.Errorf("claude = %q", got)
+			}
+			if got := get(t, tui); got != `{"plugin":["other"]}` {
+				t.Errorf("tui = %q", got)
+			}
+			gone(t, file)
+			for _, want := range []string{claude, tui, "no original", filepath.Join(filepath.Dir(stateFile(home)), "backups")} {
+				if !strings.Contains(out, want) {
+					t.Errorf("report misses %q: %s", want, out)
+				}
+			}
+			if strings.Contains(out, "nothing to uninstall") {
+				t.Errorf("report = %s", out)
+			}
+			if !strings.Contains(strings.Join(backups(t, home), "|"), ourCmd) {
+				t.Error("no backup of the file holding our entry")
+			}
+			if out := uninstall(t); !strings.Contains(out, "nothing to uninstall") {
+				t.Errorf("second run: %s", out)
+			}
+		})
+	}
+}
+
+func ptr(s string) *string { return &s }
+
+func TestLostStateLeavesWhatIsNotOurs(t *testing.T) {
+	home := sandbox(t)
+	claude := filepath.Join(home, ".claude", "settings.json")
+	copilot := filepath.Join(home, ".copilot", "settings.json")
+	tui := filepath.Join(home, ".config", "opencode", "tui.json")
+	file := filepath.Join(home, ".config", "opencode", "plugins", "rainbow-statusline", "tui.tsx")
+	wrapper := `{"statusLine":{"command":"my-wrap /opt/rainbow-statusline --agent claude"}}`
+	put(t, claude, wrapper)
+	// Comments in a file that never mentions us are no reason to stop.
+	put(t, copilot, "// mine\n{}")
+	put(t, tui, `{"plugin":["file:///elsewhere/rainbow-statusline/tui.tsx"]}`)
+	put(t, file, "// the user's own\n")
+	before := tree(t, home)
+	delete(before, stateFile(home))
+	out := uninstall(t)
+	after := tree(t, home)
+	delete(after, stateFile(home))
+	for k, v := range before {
+		if strings.HasPrefix(k, filepath.Dir(stateFile(home))) {
+			delete(before, k)
+			continue
+		}
+		if after[k] != v {
+			t.Errorf("%s changed: %q", k, after[k])
+		}
+	}
+	if !strings.Contains(out, file) || !strings.Contains(out, "left alone") {
+		t.Errorf("report = %s", out)
+	}
+}
+
+func TestLostStateBrokenFileWithOurNameRefused(t *testing.T) {
+	home := sandbox(t)
+	p := filepath.Join(home, ".claude", "settings.json")
+	body := "// x\n" + `{"statusLine":{"command":"` + ourCmd + `"}}`
+	put(t, p, body)
+	if err := Uninstall(); err == nil || !strings.Contains(err.Error(), p) {
+		t.Fatalf("err = %v", err)
+	}
+	if got := get(t, p); got != body {
+		t.Errorf("changed: %s", got)
+	}
+}
+
+func TestNullRecordIsCorruptState(t *testing.T) {
+	home := sandbox(t)
+	put(t, stateFile(home), `{"Records":{"p":null}}`)
+	if err := Uninstall(); err == nil || !strings.Contains(err.Error(), stateFile(home)) {
+		t.Errorf("err = %v", err)
+	}
+	put(t, filepath.Join(home, ".claude", "settings.json"), `{}`)
+	if _, err := Plan([]string{"claude"}); err == nil || !strings.Contains(err.Error(), stateFile(home)) {
+		t.Errorf("Plan err = %v", err)
+	}
+}
+
+func TestPreviousKeepsInvalidUTF8(t *testing.T) {
+	home := sandbox(t)
+	p := filepath.Join(home, ".claude", "settings.json")
+	put(t, p, "{\"statusLine\":{\"command\":\"a\xffb\"},\"a\":1}")
+	install(t, "claude")
+	put(t, p, strings.Replace(get(t, p), `"a":1`, `"a":1,"mine":true`, 1))
+	uninstall(t)
+	want := "{\"statusLine\":{\"command\":\"a\xffb\"},\"a\":1,\"mine\":true}"
+	if got := get(t, p); got != want {
+		t.Errorf("got %q want %q", got, want)
+	}
+}
+
+func TestBOMNamedInError(t *testing.T) {
+	home := sandbox(t)
+	p := filepath.Join(home, ".claude", "settings.json")
+	put(t, p, "\xef\xbb\xbf{}")
+	_, err := Plan([]string{"claude"})
+	if err == nil || !strings.Contains(err.Error(), p) || !strings.Contains(err.Error(), "BOM") || strings.Contains(err.Error(), "comments") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+// A kill after the files are restored must leave the records, and a rerun over
+// them changes nothing.
+func TestUninstallSavesStateAfterWrites(t *testing.T) {
+	home := sandbox(t)
+	p := filepath.Join(home, ".claude", "settings.json")
+	orig := `{"a":1}`
+	put(t, p, orig)
+	install(t, "claude")
+	snapshot := get(t, stateFile(home))
+	ran := false
+	beforeStateSave = func() {
+		ran = true
+		if got := get(t, stateFile(home)); got != snapshot {
+			t.Errorf("state already saved: %s", got)
+		}
+		if got := get(t, p); got != orig {
+			t.Errorf("file not written yet: %s", got)
+		}
+	}
+	t.Cleanup(func() { beforeStateSave = func() {} })
+	uninstall(t)
+	beforeStateSave = func() {}
+	if !ran {
+		t.Fatal("hook did not run")
+	}
+	put(t, stateFile(home), snapshot) // what the kill would have left
+	uninstall(t)
+	if got := get(t, p); got != orig {
+		t.Errorf("rerun changed the file: %s", got)
+	}
+	if out := uninstall(t); !strings.Contains(out, "nothing to uninstall") {
+		t.Errorf("third run: %s", out)
+	}
+}
+
+func TestUninstallRemovesOnlyFoldersWeCreated(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("PATH lookup needs .exe")
+	}
+	home := sandbox(t)
+	bin := filepath.Join(home, "bin")
+	for _, name := range []string{"copilot", "opencode"} {
+		put(t, filepath.Join(bin, name), "#!/bin/sh\n")
+		if err := os.Chmod(filepath.Join(bin, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	install(t, "copilot", "opencode")
+	uninstall(t)
+	gone(t, filepath.Join(home, ".copilot"))
+	gone(t, filepath.Join(home, ".config"))
+	t.Setenv("PATH", "")
+	for _, a := range Detect() {
+		if a.Found {
+			t.Errorf("%s found after uninstall", a.ID)
+		}
+	}
+
+	// A folder that was there stays, and so does one the user filled.
+	t.Setenv("PATH", bin)
+	keep := filepath.Join(home, ".copilot")
+	if err := os.MkdirAll(keep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	install(t, "copilot", "opencode")
+	put(t, filepath.Join(home, ".config", "opencode", "plugins", "mine.js"), "x")
+	uninstall(t)
+	if _, err := os.Stat(keep); err != nil {
+		t.Error("existing folder removed")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "opencode", "plugins", "mine.js")); err != nil {
+		t.Error("user's file lost")
+	}
+	gone(t, filepath.Join(home, ".config", "opencode", "plugins", "rainbow-statusline"))
+}
+
+func TestIsOurCommand(t *testing.T) {
+	for cmd, want := range map[string]bool{
+		`/opt/rainbow-statusline --agent claude`:                            true,
+		`'/Users/Łu k/bin/rainbow-statusline' --agent claude`:               true,
+		`'/o'\''b/rainbow-statusline' --agent claude`:                       true,
+		`"C:\Program Files (x86)\rs\rainbow-statusline.exe" --agent claude`: true,
+		`/opt/rainbow-statusline --agent copilot`:                           false,
+		`my-wrap /opt/rainbow-statusline --agent claude`:                    false,
+		`/opt/rainbow-statusline-old --agent claude`:                        false,
+		`/opt/rainbow-statusline --agent claude; rm x`:                      false,
+		`/opt/rainbow-statusline --agent claude --width 80`:                 false,
+	} {
+		if got := isOurCommand(cmd, "claude"); got != want {
+			t.Errorf("%q: got %v", cmd, got)
+		}
+	}
+}
+
+func TestUninstallRestoresFilesWhenStateCannotBeSaved(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("directory permissions differ on Windows")
+	}
+	home := sandbox(t)
+	p := filepath.Join(home, ".claude", "settings.json")
+	put(t, p, `{"a":1}`)
+	install(t, "claude")
+	written := get(t, p)
+	dir := filepath.Dir(stateFile(home))
+	if err := os.MkdirAll(filepath.Join(dir, "backups"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	if err := Uninstall(); err == nil {
+		t.Fatal("no error")
+	}
+	if got := get(t, p); got != written {
+		t.Errorf("got %q want %q", got, written)
 	}
 }

@@ -71,7 +71,13 @@ func main() {
 }
 
 // runUninstall is the one command that reports failure: nothing is drawing here.
-func runUninstall(out, errOut io.Writer) int {
+func runUninstall(out, errOut io.Writer) (code int) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintln(errOut, "uninstall failed:", r)
+			code = 1
+		}
+	}()
 	install.Report = out
 	if err := install.Uninstall(); err != nil {
 		fmt.Fprintln(errOut, "uninstall failed:", err)
