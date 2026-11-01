@@ -279,35 +279,85 @@ func TestWorkerNon200IsIgnored(t *testing.T) {
 	}
 }
 
-func TestMemInjectIsPerSessionAndReadOnce(t *testing.T) {
+func TestMemInjectIsPerSessionAndRefetchedOnlyAfter23Hours(t *testing.T) {
 	e := setup(t)
 	seedMem(t, e)
-	var keys []string
-	var ages []time.Duration
-	inner := cacheGet
-	cacheGet = func(key string, age time.Duration) ([]byte, bool) {
-		keys, ages = append(keys, key), append(ages, age)
-		return inner(key, age)
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, _ = w.Write([]byte("2,000t work | 1,000t saved"))
+	}))
+	defer srv.Close()
+	workerURL = srv.URL
+	defer func() { workerURL = workerBase }()
+
+	// a cache with real age semantics on a fake clock
+	type entry struct {
+		v  []byte
+		at time.Time
 	}
-	a := model.Session{Agent: "opencode", SessionID: "ses_a", Cwd: "/w"}
-	b := a
-	b.SessionID = "ses_b"
-	claudeMem{}.Badge(a)
-	claudeMem{}.Badge(b)
-	var memKeys []string
-	for i, k := range keys {
-		if strings.HasPrefix(k, prefixMemInj) {
-			memKeys = append(memKeys, k)
-			if ages[i] < 24*time.Hour {
-				t.Errorf("%s is refetched after %v", k, ages[i])
+	store := map[string]entry{}
+	clock := time.Now()
+	var maxAges []time.Duration
+	cacheGet = func(key string, maxAge time.Duration) ([]byte, bool) {
+		if strings.HasPrefix(key, prefixMemInj) {
+			maxAges = append(maxAges, maxAge)
+		}
+		en, ok := store[key]
+		if !ok || clock.Sub(en.at) > maxAge {
+			if v, err := compute(t.Context(), key); err == nil {
+				store[key] = entry{v, clock}
 			}
 		}
+		en, ok = store[key]
+		if !ok || clock.Sub(en.at) > 24*time.Hour {
+			return nil, false
+		}
+		return en.v, true
 	}
-	if len(memKeys) != 2 || memKeys[0] == memKeys[1] || !strings.Contains(memKeys[0], "ses_a") {
-		t.Fatalf("keys %v", memKeys)
+	a := model.Session{Agent: "opencode", SessionID: "ses_a", Cwd: "/w"}
+	for range 2 {
+		claudeMem{}.Badge(a)
+	}
+	if hits != 1 {
+		t.Fatalf("second draw refetched: %d hits", hits)
+	}
+	clock = clock.Add(22 * time.Hour)
+	if got := text(first(claudeMem{}.Badge(a))); hits != 1 || !strings.Contains(got, "(c: 1.0k · 50% |") {
+		t.Fatalf("after 22 h: hits=%d %q", hits, got)
+	}
+	clock = clock.Add(2 * time.Hour)
+	if got := text(first(claudeMem{}.Badge(a))); hits != 2 || !strings.Contains(got, "(c: 1.0k · 50% |") {
+		t.Fatalf("after 24 h: hits=%d %q (value must stay visible)", hits, got)
+	}
+	for _, m := range maxAges {
+		if m != 23*time.Hour {
+			t.Errorf("maxAge %v, want 23h", m)
+		}
+	}
+
+	b := a
+	b.SessionID = "ses_b"
+	claudeMem{}.Badge(b)
+	if hits != 3 {
+		t.Fatalf("another session shared the value: %d hits", hits)
 	}
 	if got := text(first(claudeMem{}.Badge(model.Session{Agent: "opencode", Cwd: "/w", SessionID: "bad id"}))); !strings.Contains(got, "(c: — |") {
 		t.Fatalf("unsafe id: %q", got)
+	}
+}
+
+func TestPutInputOfEqualContentRefreshesItsAge(t *testing.T) {
+	setup(t)
+	dir, _ := inputDir()
+	putInput("rtko-ses_a", []byte("x"))
+	p := filepath.Join(dir, "rtko-ses_a.in")
+	old := time.Now().Add(-47 * time.Hour)
+	_ = os.Chtimes(p, old, old)
+	putInput("rtko-ses_a", []byte("x"))
+	info, _ := os.Stat(p)
+	if time.Since(info.ModTime()) > time.Minute {
+		t.Fatalf("mtime %v", info.ModTime())
 	}
 }
 

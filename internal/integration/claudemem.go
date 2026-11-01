@@ -83,11 +83,11 @@ func memSessionPair(s model.Session) (saved, work int64, ok bool) {
 		if s.Cwd == "" || !validSessionID(s.SessionID) {
 			return 0, 0, false
 		}
-		// Like the OpenCode plugin, read once per session: the cache value is
-		// good for as long as the cache keeps it.
+		// Like the OpenCode plugin, read once per session; a session that runs
+		// longer than ageInject fetches again, before the cache hides the value.
 		key := memInjectKey(s.SessionID, s.Cwd)
 		putInput(key, []byte(s.Cwd))
-		return cachedPair(key, ageForever)
+		return cachedPair(key, ageInject)
 	}
 	_, saved, work, ok = TranscriptStats(s.TranscriptPath)
 	return saved, work, ok

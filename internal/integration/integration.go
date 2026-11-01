@@ -44,7 +44,7 @@ const (
 	ageTotal   = 60 * time.Second
 	ageSession = 30 * time.Second
 	ageScan    = 5 * time.Second
-	ageForever = 1000 * time.Hour // the cache hides values older than a day anyway
+	ageInject  = 23 * time.Hour // a long session refetches once a day; the cache hides values after 24 h
 )
 
 var (
@@ -131,6 +131,8 @@ func putInput(key string, data []byte) {
 	}
 	p := filepath.Join(dir, key+".in")
 	if old, err := os.ReadFile(p); err == nil && string(old) == string(data) {
+		now := time.Now()
+		_ = os.Chtimes(p, now, now) // a live session's input must not look old to pruneOld
 		return
 	}
 	if os.MkdirAll(dir, 0o700) != nil {
