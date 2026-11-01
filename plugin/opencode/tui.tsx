@@ -12,7 +12,9 @@ type Segment = { text: string; fg: string; bold: boolean; dim: boolean }
 
 // A relative path, or running from the project folder, could start a binary the project supplies.
 const ENV_BIN = process.env.RAINBOW_STATUSLINE_BIN
-const BIN = ENV_BIN && isAbsolute(ENV_BIN) ? ENV_BIN : "rainbow-statusline"
+// The installer writes the binary's absolute path here in the copy it installs.
+const INSTALLED_BIN = ""
+const BIN = ENV_BIN && isAbsolute(ENV_BIN) ? ENV_BIN : INSTALLED_BIN || "rainbow-statusline"
 const INTERVAL_MS = 1000
 const LIMIT_MS = 2000
 const DIM = "#6c6c6c"

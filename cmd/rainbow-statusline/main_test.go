@@ -3,10 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/milczarekIT/rainbow-statusline/internal/config"
+	"github.com/milczarekIT/rainbow-statusline/internal/install"
 )
 
 func TestResolveWidth(t *testing.T) {
@@ -77,5 +81,54 @@ func TestDefaultFormatStaysANSI(t *testing.T) {
 	out := runBinary(t, `{}`, "--agent", "opencode")
 	if !strings.Contains(string(out), "\x1b[") || json.Valid(out) {
 		t.Errorf("got %q", out)
+	}
+}
+
+func TestUninstallSubcommand(t *testing.T) {
+	home := t.TempDir()
+	for _, k := range []string{"XDG_CONFIG_HOME", "COPILOT_HOME", "CLAUDE_CONFIG_DIR", "PATH"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	old := config.ConfigDir
+	config.ConfigDir = func() (string, error) { return filepath.Join(home, "cfg"), nil }
+	t.Cleanup(func() { config.ConfigDir = old })
+
+	p := filepath.Join(home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	orig := `{"a":1}`
+	if err := os.WriteFile(p, []byte(orig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changes, err := install.Plan([]string{"claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := install.Apply(changes); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := runUninstall(&out, &errOut); code != 0 || errOut.Len() != 0 {
+		t.Fatalf("code %d, stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), p) {
+		t.Errorf("stdout = %q", out.String())
+	}
+	if got, _ := os.ReadFile(p); string(got) != orig {
+		t.Errorf("got %q", got)
+	}
+
+	// A broken state is an error with a non-zero exit.
+	sf := filepath.Join(home, "cfg", "rainbow-statusline", "state", "state.json")
+	if err := os.WriteFile(sf, []byte("garbage"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	errOut.Reset()
+	if code := runUninstall(&out, &errOut); code != 1 || !strings.Contains(errOut.String(), sf) {
+		t.Errorf("code %d, stderr %q", code, errOut.String())
 	}
 }

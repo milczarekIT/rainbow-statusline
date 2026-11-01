@@ -12,6 +12,7 @@ import (
 	"github.com/milczarekIT/rainbow-statusline/internal/adapter"
 	"github.com/milczarekIT/rainbow-statusline/internal/cache"
 	"github.com/milczarekIT/rainbow-statusline/internal/config"
+	"github.com/milczarekIT/rainbow-statusline/internal/install"
 	"github.com/milczarekIT/rainbow-statusline/internal/integration"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 	"github.com/milczarekIT/rainbow-statusline/internal/render"
@@ -21,6 +22,10 @@ import (
 func main() {
 	// Drawing never crashes and never shows an error on the assistant's screen.
 	defer func() { _ = recover() }()
+
+	if len(os.Args) == 2 && os.Args[1] == "uninstall" {
+		os.Exit(runUninstall(os.Stdout, os.Stderr))
+	}
 
 	integration.RegisterCaches()
 	if len(os.Args) == 3 && os.Args[1] == "refresh" {
@@ -63,6 +68,16 @@ func main() {
 		return
 	}
 	fmt.Print(render.ANSI(lines))
+}
+
+// runUninstall is the one command that reports failure: nothing is drawing here.
+func runUninstall(out, errOut io.Writer) int {
+	install.Report = out
+	if err := install.Uninstall(); err != nil {
+		fmt.Fprintln(errOut, "uninstall failed:", err)
+		return 1
+	}
+	return 0
 }
 
 func fillFromSystem(s *model.Session) {
