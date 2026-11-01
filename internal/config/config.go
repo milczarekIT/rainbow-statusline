@@ -23,6 +23,9 @@ func path() (string, error) {
 	return filepath.Join(dir, "rainbow-statusline", "config.json"), nil
 }
 
+// Path is where the configuration file lives.
+func Path() (string, error) { return path() }
+
 func defaults() Config { return Config{View: View{Density: "full"}} }
 
 // Load reads the file. It never fails: a missing or broken file gives the

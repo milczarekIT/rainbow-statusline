@@ -46,7 +46,7 @@ func TestGuideStartsWithDetectedSelected(t *testing.T) {
 	}
 	pressG(g, "enter")
 	b = body(g)
-	for _, want := range []string{"Step 2 of 4: What should the bar show?", "[x] RTK", "[ ] Caveman", "not detected", "estimate"} {
+	for _, want := range []string{"Step 2 of 4: What should the bar show?", "[x] RTK", "[x] Caveman", "not detected, appears after install", "estimate"} {
 		if !strings.Contains(b, want) {
 			t.Errorf("step 2 missing %q:\n%s", want, b)
 		}
@@ -275,5 +275,149 @@ func TestGuideTinyTerminal(t *testing.T) {
 	g.Update(tea.WindowSizeMsg{Width: 30, Height: 10})
 	if !strings.Contains(body(g), "Terminal too small") {
 		t.Errorf("body:\n%s", body(g))
+	}
+}
+
+func TestGuideUndetectedPluginIsNotSavedAsHidden(t *testing.T) {
+	home := sandbox(t)
+	mkdir(t, filepath.Join(home, ".claude"))
+	plugins := map[string]bool{"ponytail": true, "caveman": false, "rtk": true, "claude-mem": true}
+	g := newGuide(config.Config{}, plugins, []install.Agent{{ID: "claude", Name: "Claude Code", Found: true}})
+	g.Update(tea.WindowSizeMsg{Width: screenWidth, Height: screenHeight})
+	pressG(g, "enter", "enter", "enter", "enter")
+	cfg, found := config.Load()
+	if !found {
+		t.Fatal("config not saved")
+	}
+	for _, h := range cfg.Hidden {
+		if h == "caveman" {
+			t.Errorf("undetected plugin saved as hidden: %v", cfg.Hidden)
+		}
+	}
+}
+
+func TestGuideExplicitlyHiddenUndetectedPluginIsSaved(t *testing.T) {
+	sandbox(t)
+	plugins := map[string]bool{"ponytail": true, "caveman": false, "rtk": true, "claude-mem": true}
+	g := newGuide(config.Config{}, plugins, nil)
+	g.Update(tea.WindowSizeMsg{Width: screenWidth, Height: screenHeight})
+	pressG(g, "enter", "down", "space")
+	if !strings.Contains(body(g), "[ ] Caveman") {
+		t.Errorf("toggled off:\n%s", body(g))
+	}
+	pressG(g, "enter", "enter", "enter")
+	cfg, _ := config.Load()
+	if strings.Join(cfg.Hidden, ",") != "caveman" {
+		t.Errorf("hidden: %v", cfg.Hidden)
+	}
+}
+
+func TestGuideApplyFailureRefreshesThePlan(t *testing.T) {
+	home := sandbox(t)
+	settings := filepath.Join(home, ".claude", "settings.json")
+	mkdir(t, filepath.Dir(settings))
+	g := newGuide(config.Config{}, allPlugins(), []install.Agent{{ID: "claude", Name: "Claude Code", Found: true}})
+	g.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
+	pressG(g, "enter", "enter", "enter")
+	if err := os.WriteFile(settings, []byte(`{"statusLine":{"type":"command","command":"my-own-bar"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pressG(g, "enter")
+	b := body(g)
+	if !strings.Contains(strings.ToLower(b), "error") || !strings.Contains(b, "my-own-bar") || !strings.Contains(b, "replaced") {
+		t.Fatalf("refreshed plan should name the status line:\n%s", b)
+	}
+	if _, err := os.Stat(configFile(t)); !os.IsNotExist(err) {
+		t.Fatal("config saved after a failed install")
+	}
+	pressG(g, "enter")
+	if !strings.Contains(body(g), "Done.") {
+		t.Errorf("retry after review should install:\n%s", body(g))
+	}
+}
+
+func TestGuideRetriesOnlyTheSaveAfterSaveFailure(t *testing.T) {
+	home := sandbox(t)
+	settings := filepath.Join(home, ".claude", "settings.json")
+	mkdir(t, filepath.Dir(settings))
+	cfgFile := configFile(t)
+	mkdir(t, filepath.Join(cfgFile, "in-the-way")) // a folder where the file belongs
+	g := newGuide(config.Config{}, allPlugins(), []install.Agent{{ID: "claude", Name: "Claude Code", Found: true}})
+	g.Update(tea.WindowSizeMsg{Width: screenWidth, Height: screenHeight})
+	pressG(g, "enter", "enter", "enter", "enter")
+	if !strings.Contains(body(g), "Step 4 of 4") || !strings.Contains(body(g), "not saved") {
+		t.Fatalf("save failure should stay on step 4:\n%s", body(g))
+	}
+	if _, err := os.Stat(settings); err != nil {
+		t.Fatalf("assistant should be set up: %v", err)
+	}
+	if err := os.Remove(settings); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(cfgFile); err != nil {
+		t.Fatal(err)
+	}
+	pressG(g, "enter")
+	if !strings.Contains(body(g), "Done.") {
+		t.Errorf("retry:\n%s", body(g))
+	}
+	if _, err := os.Stat(settings); !os.IsNotExist(err) {
+		t.Error("the retry must not apply again")
+	}
+	if _, found := config.Load(); !found {
+		t.Error("config not saved on retry")
+	}
+}
+
+func TestGuideReplansAfterGoingBack(t *testing.T) {
+	home := sandbox(t)
+	mkdir(t, filepath.Join(home, ".claude"))
+	mkdir(t, filepath.Join(home, ".config", "opencode"))
+	agents := []install.Agent{{ID: "claude", Name: "Claude Code", Found: true}, {ID: "opencode", Name: "OpenCode", Found: true}}
+	g := newGuide(config.Config{}, allPlugins(), agents)
+	g.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
+	pressG(g, "enter", "enter", "enter")
+	changes, _ := install.Plan([]string{"opencode"})
+	if len(changes) == 0 || !strings.Contains(body(g), changes[0].Path) {
+		t.Fatalf("opencode should be listed:\n%s", body(g))
+	}
+	pressG(g, "esc", "esc", "esc", "down", "space", "enter", "enter", "enter")
+	if strings.Contains(body(g), changes[0].Path) {
+		t.Errorf("deselected assistant still listed:\n%s", body(g))
+	}
+}
+
+func TestGuideSummaryNamesSettingsFileAndUnchangedAssistants(t *testing.T) {
+	sandbox(t)
+	g := newGuide(config.Config{}, allPlugins(), []install.Agent{{ID: "claude", Name: "Claude Code", Found: true}})
+	g.Update(tea.WindowSizeMsg{Width: 200, Height: 40})
+	g.step, g.planned = 3, true // a plan with nothing to do for the selected assistant
+	b := body(g)
+	if !strings.Contains(b, "Claude Code: already set up, nothing to change") {
+		t.Errorf("unchanged assistant:\n%s", b)
+	}
+	if !strings.Contains(b, "Bar settings: "+configFile(t)) {
+		t.Errorf("settings path:\n%s", b)
+	}
+}
+
+func TestGuideEnterOnDensitySelectsHighlighted(t *testing.T) {
+	g := newGuideTest(t, allPlugins(), testAgents())
+	pressG(g, "enter", "enter", "down", "enter")
+	if g.view.Density != "compact" || !strings.Contains(body(g), "Step 4 of 4") {
+		t.Errorf("density %q:\n%s", g.view.Density, body(g))
+	}
+}
+
+func TestGuideDoneQuitsOnAnyKey(t *testing.T) {
+	sandbox(t)
+	g := newGuide(config.Config{}, allPlugins(), nil)
+	g.Update(tea.WindowSizeMsg{Width: screenWidth, Height: screenHeight})
+	pressG(g, "enter", "enter", "enter", "enter")
+	if !strings.Contains(body(g), "Done.") {
+		t.Fatalf("not done:\n%s", body(g))
+	}
+	if !isQuit(pressG(g, "x")) {
+		t.Error("any key leaves")
 	}
 }

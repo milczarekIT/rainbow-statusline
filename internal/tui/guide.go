@@ -44,11 +44,6 @@ func newGuide(cfg config.Config, plugins map[string]bool, agents []install.Agent
 	if g.view.Density == "" {
 		g.view.Density = "full"
 	}
-	for _, id := range config.Items()[:badgeCount] {
-		if detected := plugins[id]; !detected && g.view.Shows(id) {
-			g.view.Hidden = append(g.view.Hidden, id)
-		}
-	}
 	for _, a := range agents {
 		g.agents = append(g.agents, agentRow{Agent: a, selected: a.Found})
 	}
@@ -62,18 +57,15 @@ func (g *guide) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		g.width, g.height = msg.Width, msg.Height
 	case tea.KeyPressMsg:
+		if g.done {
+			return g, tea.Quit
+		}
 		return g, g.key(actionFor(msg))
 	}
 	return g, nil
 }
 
 func (g *guide) key(a action) tea.Cmd {
-	if g.done {
-		if a != actNone {
-			return tea.Quit
-		}
-		return nil
-	}
 	if a == actQuit {
 		return tea.Quit
 	}
@@ -141,6 +133,9 @@ func (g *guide) back() {
 
 func (g *guide) next() tea.Cmd {
 	if g.step < 3 {
+		if g.step == 2 {
+			g.view.Density = densities[g.cursor].id
+		}
 		g.goTo(g.step + 1)
 		return nil
 	}
@@ -199,7 +194,10 @@ func (g *guide) install() {
 	}
 	if !g.applied && len(g.changes) > 0 {
 		if err := install.Apply(g.changes); err != nil {
-			g.err = "Error: " + err.Error()
+			msg := "Error: " + err.Error()
+			if g.plan(); g.err == "" {
+				g.err = msg + " Review the list again and choose Install to retry."
+			}
 			return
 		}
 	}
@@ -217,8 +215,21 @@ func (g *guide) View() tea.View {
 	return v
 }
 
+// previewView hides the plugins that are not installed yet; the saved view
+// keeps them shown so their badges appear once they are installed.
+func (g *guide) previewView() config.View {
+	v := g.view
+	v.Hidden = append([]string(nil), g.view.Hidden...)
+	for id, detected := range g.plugins {
+		if !detected {
+			v.Hidden = append(v.Hidden, id)
+		}
+	}
+	return v
+}
+
 func (g *guide) preview() string {
-	return render.ANSI(previewLines(g.view, DemoSession(), g.width-2))
+	return render.ANSI(previewLines(g.previewView(), DemoSession(), g.width-2))
 }
 
 func (g *guide) body() string {
@@ -293,7 +304,7 @@ func (g *guide) itemsStep(line func(string), dim lipgloss.Style) {
 			row = strings.TrimRight(row, " ") + " (estimate)"
 		}
 		if detected, isPlugin := g.plugins[id]; isPlugin && !detected {
-			row += "  not detected: nothing to read here yet, so it starts hidden"
+			row += "  not detected, appears after install"
 		}
 		line(row)
 	}
@@ -322,6 +333,20 @@ func (g *guide) summaryStep(line func(string)) {
 	}
 	for _, c := range g.changes {
 		line(fmt.Sprintf("  %s: %s", c.Path, c.Summary))
+	}
+	if g.planned {
+		for _, id := range g.selectedIDs() {
+			touched := false
+			for _, c := range g.changes {
+				touched = touched || c.Agent == id
+			}
+			if !touched {
+				line(fmt.Sprintf("  %s: already set up, nothing to change", g.agentName(id)))
+			}
+		}
+	}
+	if p, err := config.Path(); err == nil {
+		line("  Bar settings: " + p)
 	}
 	for _, c := range g.changes {
 		if c.Replaces != "" {
