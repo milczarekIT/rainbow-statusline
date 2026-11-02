@@ -1,6 +1,6 @@
 # Windows and Copilot steps for the owner
 
-Goal: answer the open questions in `docs/discovery.md` and collect real samples on Windows and with the Copilot account. About 30 minutes. Nothing here changes your real assistant settings: each run uses a throw-away config (`claude --settings`, a temporary `COPILOT_HOME`, temporary `XDG_*` dirs). Each stage prints what it did; send back what the last stage lists.
+Goal: answer the open questions in `docs/discovery.md`, collect real samples on Windows and with the Copilot account, then run the product itself there. About an hour. Nothing here changes your real assistant settings: each run uses a throw-away config (`claude --settings`, a temporary `COPILOT_HOME`, temporary `XDG_*` dirs, a temporary profile). Stage 5 Part B is the one exception outside those settings: it changes your user PATH for a moment and restores it. Each stage says what to send back; the last stage collects it.
 
 All commands are PowerShell (Windows PowerShell 5.1 or PowerShell 7) unless stated. Use Windows Terminal.
 
@@ -14,15 +14,27 @@ On the Mac first, so the branch exists on GitHub (the agent never pushes):
 git -C ~/dev/rainbow-statusline push -u origin feat/v1
 ```
 
-On Windows, install what the stages need (Git for the clone, GitHub CLI for the private repo, Go for the scrubber; `winget` ships with current Windows 10/11):
+On Windows, install what the stages need (Git for the clone and for Git Bash, GitHub CLI for the private repo, Go for the scrubber and the builds, Node.js only to install the assistants; `winget` ships with current Windows 10/11):
 
 ```
 winget install --id Git.Git -e
 winget install --id GitHub.cli -e
 winget install --id GoLang.Go -e
+winget install --id OpenJS.NodeJS.LTS -e
 ```
 
-Open a new terminal so `git`, `gh` and `go` are on PATH, then sign in to GitHub (choose GitHub.com, HTTPS, and log in with the browser):
+Open a new terminal so `git`, `gh`, `go` and `npm` are on PATH, then install the assistants:
+
+```
+npm install -g @anthropic-ai/claude-code @github/copilot opencode-ai
+claude --version
+copilot --version
+opencode --version
+```
+
+Expected: three version numbers. If PowerShell says running scripts is disabled, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` and repeat; `Set-ExecutionPolicy -Scope CurrentUser Undefined` undoes it when you are done. Stage 2 needs a Claude account (`claude`, then `/login`) and Stage 4 a Copilot account (`copilot`, then `/login`). Without one of them, skip that stage and the matching assistant in Stage 5, and say so. OpenCode needs no account.
+
+Then sign in to GitHub (choose GitHub.com, HTTPS, and log in with the browser):
 
 ```
 gh auth login
@@ -41,7 +53,9 @@ go test ./scripts/
 ```
 
 Expected: `go version go1.2x ... windows/amd64` and `ok  github.com/milczarekIT/rainbow-statusline/scripts`.
-If you do not want to install Go, skip it: the stages still collect samples, but the scrub step prints "Go is not installed" and the raw files stay private (do not send them; tell the agent and it will arrange another way).
+If you do not want to install Go, skip it: Stages 1 to 4 still collect samples, but the scrub step prints "Go is not installed" and the raw files stay private (do not send them; tell the agent and it will arrange another way). Stages 4b and 5 build the binary, so they need Go.
+
+Send back: only a failure here, with the command and its output.
 
 ## Stage 1: versions and data locations
 
@@ -79,7 +93,11 @@ Expected: while it runs the status line shows the word `captured`. If it shows a
 
 Check: `Get-ChildItem C:\dev\rs-collected\raw\claude-*.json | Measure-Object` shows at least a few files.
 
+Send back: what the status line showed. The samples go with the last stage.
+
 ## Stage 3: OpenCode on Windows
+
+Working directory: `C:\dev\rainbow-statusline`. Part B and Part C move to a temporary folder and come back.
 
 Part A, session export (one free-model prompt, no account needed):
 
@@ -154,25 +172,203 @@ Questions to answer from this stage:
 2. Does `copilot help config` on Windows still describe `statusLine` and `cmd.exe`? (`copilot help config | Select-String statusLine`)
 3. If you use Ponytail, Caveman, RTK or claude-mem with Copilot: where does each keep data on Windows? (Same two `Get-ChildItem` searches as stage 1, plus `Get-ChildItem $HOME\.copilot -Recurse -Depth 2`.)
 
+Send back: the answers to the three questions. The samples go with the last stage.
+
 ## Stage 4b: paths the installer must survive
 
-Working directory: `C:\dev\rainbow-statusline`. Needs a build of the binary (`go build -o $env:TEMP\rs.exe .\cmd\rainbow-statusline`). Run in a temporary profile: the installer must not touch your real settings during this check. Quoting is only tested as text on the Mac, so this stage is what proves it.
+Working directory: `C:\dev\rainbow-statusline`. This stage runs no installer, so your real settings are not touched: it only runs the binary by hand and starts Claude Code with a one-run settings file. Quoting is only tested as text on the Mac, so this stage is what proves it. `--%` below keeps PowerShell from rewriting the quotes; the text after it reaches the shell exactly as written.
 
-1. Which shell does Claude Code use for the status line? Point a test `statusLine` command (via `claude --settings <file>`) at `echo %COMSPEC% $BASH_VERSION` and report what it draws: a `cmd.exe` path means cmd.exe, a version number means Git Bash.
-2. Copy `rs.exe` to `C:\Program Files (x86)\rs-test\rainbow-statusline.exe` and to a UNC path such as `\\localhost\C$\rs-test\rainbow-statusline.exe`. Note: a real install refuses a `$` path, so for the UNC case use a share without `$`, e.g. `New-SmbShare -Name rstest -Path C:\rs-test` and `\\localhost\rstest\rainbow-statusline.exe`. Run each, quoted the way the installer writes it, under both shells, with sample input on stdin:
+Build into a folder the later steps share:
 
-   ```
-   Get-Content testdata\claude\session-after-reply.json | cmd /d /s /c '"C:\Program Files (x86)\rs-test\rainbow-statusline.exe" --agent claude'
-   Get-Content testdata\claude\session-after-reply.json | cmd /c '"C:\Program Files (x86)\rs-test\rainbow-statusline.exe" --agent claude'
-   Get-Content testdata\claude\session-after-reply.json | bash -c '"C:\Program Files (x86)\rs-test\rainbow-statusline.exe" --agent claude'
-   Get-Content testdata\claude\session-after-reply.json | cmd /d /s /c '"\\localhost\rstest\rainbow-statusline.exe" --agent claude'
-   Get-Content testdata\claude\session-after-reply.json | bash -c '"\\localhost\rstest\rainbow-statusline.exe" --agent claude'
-   ```
+```
+New-Item -ItemType Directory -Force C:\rs-test | Out-Null
+go build -o C:\rs-test\rainbow-statusline.exe .\cmd\rainbow-statusline
+```
 
-   Expected: each prints a status line. Report any that does not; the UNC form under bash is the most likely to fail, because bash collapses `\\`.
-3. In live OpenCode with a temporary `XDG_CONFIG_HOME`, copy the plugin to `C:\rs-test\Łukasz K\tui.tsx` and list it in `tui.json` as `file:///C:/rs-test/%C5%81ukasz%20K/tui.tsx`. Expected: the bar appears. If it does not, try the unencoded form and report which one loads. Repeat on the Mac with a path holding a space and `Ł`.
+Step 1, ordinary window: which shell does Claude Code use for the status line?
 
-## Stage 5: send back
+```
+$f = "C:\rs-test\shell-settings.json"
+[IO.File]::WriteAllText($f, '{"statusLine":{"type":"command","command":"echo %COMSPEC% $BASH_VERSION"}}')
+claude --settings $f
+```
+
+Read the status line, then type `/exit`. Expected: a `cmd.exe` path means cmd.exe, a version number means Git Bash.
+
+Step 2a, **elevated window** (right-click Windows Terminal, Run as administrator; only these commands need it), because `Program Files (x86)` and SMB shares are admin-only:
+
+```
+New-Item -ItemType Directory -Force 'C:\Program Files (x86)\rs-test' | Out-Null
+Copy-Item C:\rs-test\rainbow-statusline.exe 'C:\Program Files (x86)\rs-test\'
+New-SmbShare -Name rstest -Path C:\rs-test -ReadAccess $env:USERNAME
+```
+
+Expected: the share is listed with `Name rstest`. A real install refuses a `$` path, so `C$` is not used. Leave this window open for the cleanup.
+
+Step 2b, ordinary window, in `C:\dev\rainbow-statusline`. Each runs the binary quoted the way the installer writes it, under both shells:
+
+```
+Get-Content testdata\claude\session-after-reply.json | cmd --% /d /s /c ""C:\Program Files (x86)\rs-test\rainbow-statusline.exe" --agent claude"
+Get-Content testdata\claude\session-after-reply.json | cmd --% /c ""C:\Program Files (x86)\rs-test\rainbow-statusline.exe" --agent claude"
+Get-Content testdata\claude\session-after-reply.json | & "$env:ProgramFiles\Git\bin\bash.exe" --% -c "\"C:\Program Files (x86)\rs-test\rainbow-statusline.exe\" --agent claude"
+Get-Content testdata\claude\session-after-reply.json | cmd --% /d /s /c ""\\localhost\rstest\rainbow-statusline.exe" --agent claude"
+Get-Content testdata\claude\session-after-reply.json | & "$env:ProgramFiles\Git\bin\bash.exe" --% -c "\"\\localhost\rstest\rainbow-statusline.exe\" --agent claude"
+```
+
+Expected: each prints a status line. Report any that does not; the UNC form under bash is the most likely to fail, because bash collapses `\\`.
+
+Step 3, ordinary window: the plugin in a folder with a space and non-ASCII letters, in live OpenCode. Do not send a prompt.
+
+```
+$d = 'C:\rs-test\Żółć T'
+New-Item -ItemType Directory -Force $d, C:\rs-test\oc\opencode | Out-Null
+Copy-Item plugin\opencode\tui.tsx $d
+Set-Content -Encoding ascii C:\rs-test\oc\opencode\tui.json '{"plugin":["file:///C:/rs-test/%C5%BB%C3%B3%C5%82%C4%87%20T/tui.tsx"]}'
+$env:XDG_CONFIG_HOME = 'C:\rs-test\oc'; $env:RAINBOW_STATUSLINE_BIN = 'C:\rs-test\rainbow-statusline.exe'
+opencode
+```
+
+Expected: the bar appears at the bottom. If it does not, quit, run this and start `opencode` again, then report which form loads:
+
+```
+[IO.File]::WriteAllText('C:\rs-test\oc\opencode\tui.json', '{"plugin":["file:///C:/rs-test/Żółć T/tui.tsx"]}')
+```
+
+Quit with `/exit`, then clean up:
+
+```
+Remove-Item Env:XDG_CONFIG_HOME, Env:RAINBOW_STATUSLINE_BIN
+```
+
+In the elevated window:
+
+```
+Remove-SmbShare -Name rstest -Force
+Remove-Item -Recurse -Force 'C:\Program Files (x86)\rs-test', C:\rs-test
+```
+
+Send back: the shell Claude Code uses, which of the five commands failed and their output, and which plugin URL form loaded.
+
+## Stage 5: the product itself
+
+Stages 1 to 4b prove the pieces. This one installs and runs the real program. Part A uses a throw-away profile, so your settings stay untouched. Part B changes your user PATH for a moment and restores it.
+
+### Part A: guide, real assistants, uninstall
+
+Working directory: `C:\dev\rainbow-statusline`. Open a **new PowerShell window** for this part, because the variables below redirect everything to a temporary profile; closing the window ends that. No elevation.
+
+```
+$t = "$env:TEMP\rs-product"
+$realCopilot = "$env:USERPROFILE\.copilot\config.json"
+New-Item -ItemType Directory -Force "$t\bin", "$t\home\.claude", "$t\copilot", "$t\xdg\config\opencode", "$t\xdg\data", "$t\xdg\state", "$t\xdg\cache", "$t\appdata", "$t\localappdata" | Out-Null
+go build -o "$t\bin\rainbow-statusline.exe" .\cmd\rainbow-statusline
+if (Test-Path $realCopilot) { Copy-Item $realCopilot "$t\copilot\config.json" }
+[IO.File]::WriteAllText("$t\home\.claude\settings.json", '{"theme":"dark","statusLine":{"type":"command","command":"echo old-claude-bar"}}')
+[IO.File]::WriteAllText("$t\copilot\settings.json", '{"statusLine":{"type":"command","command":"echo old-copilot-bar"}}')
+[IO.File]::WriteAllText("$t\xdg\config\opencode\tui.json", '{"theme":"system"}')
+$settings = "$t\home\.claude\settings.json", "$t\copilot\settings.json", "$t\xdg\config\opencode\tui.json"
+$before = Get-FileHash $settings
+$env:USERPROFILE = "$t\home"; $env:HOME = "$t\home"; $env:APPDATA = "$t\appdata"; $env:LOCALAPPDATA = "$t\localappdata"
+$env:COPILOT_HOME = "$t\copilot"; $env:XDG_CONFIG_HOME = "$t\xdg\config"; $env:XDG_DATA_HOME = "$t\xdg\data"; $env:XDG_STATE_HOME = "$t\xdg\state"; $env:XDG_CACHE_HOME = "$t\xdg\cache"
+Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue
+& "$t\bin\rainbow-statusline.exe" --version
+& "$t\bin\rainbow-statusline.exe" --help
+& "$t\bin\rainbow-statusline.exe"
+```
+
+Expected: `dev`, then the usage text, then the guide. On step 1 all three assistants are detected. Leave them ticked and go through the steps. On the last step **every path must be under `rs-product`, and each assistant's old bar must be named as replaced**; if a real path appears, choose Quit and tell the agent. Otherwise choose Install. Expected: `Done. Restart your assistant to see the bar.`
+
+Check what the install wrote and that the screen opens now:
+
+```
+Get-Content $settings
+& "$t\bin\rainbow-statusline.exe"
+```
+
+Expected: each `settings.json` has a `rainbow-statusline` status line command, `theme` is still there, and `tui.json` lists the plugin. The second command opens the configuration screen with all three assistants ticked; press `q`.
+
+Draw in each real assistant, from the repo folder. They do not see your normal logins here: in Claude Code run `/login`; Copilot uses the copied `config.json`, or `/login` if it asks; OpenCode needs no account. Type `say ok`, wait for the answer, note the bar, then `/exit`.
+
+```
+claude
+copilot
+opencode
+```
+
+Expected: the same layout in all three, with `user@host:dir` and a `ctx` figure after the reply. Claude Code shows a cost and a cache timer; Copilot shows `$—` and `cache —`. Note any console window that flashes while OpenCode runs.
+
+Uninstall and compare:
+
+```
+& "$t\bin\rainbow-statusline.exe" uninstall
+$after = Get-FileHash $settings
+Compare-Object $before $after -Property Hash, Path
+Get-Content $settings
+Get-ChildItem -Recurse "$t\appdata\rainbow-statusline" | Select-Object FullName
+```
+
+Expected: `Compare-Object` prints nothing. An assistant may rewrite its own settings while it runs; then the hash differs, and `Get-Content` must still show the old bar back and no `rainbow-statusline`. The last command lists the kept configuration and the backups. Close this window, then in a new one:
+
+```
+Remove-Item -Recurse -Force "$env:TEMP\rs-product"
+```
+
+Testing on your real profile instead is your decision: skip the block that sets the variables and the seeded files, and run the guide only after saying yes to that. The uninstall restores the settings, and the backups stay in `%APPDATA%\rainbow-statusline\state\backups`.
+
+### Part B: install.ps1 on a one-entry user PATH
+
+Working directory: `C:\dev\rainbow-statusline`. Open a new PowerShell window and keep it open until the restore has run. No elevation: the user PATH lives under `HKCU`. Open no other program in between, since it would start with the test PATH.
+
+Save your PATH, in the registry's raw form, and set a single entry that holds a `%VAR%`:
+
+```
+$a = "$env:TEMP\rs-script"
+New-Item -ItemType Directory -Force $a | Out-Null
+$key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+$raw = [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+$savedPath = $key.GetValue('Path', $null, $raw)
+if ($null -ne $savedPath) { $savedKind = $key.GetValueKind('Path'); Set-Content -Encoding utf8 "$env:USERPROFILE\rs-path-backup.txt" $savedPath }
+$key.SetValue('Path', '%USERPROFILE%\rs-one-entry', [Microsoft.Win32.RegistryValueKind]::ExpandString)
+```
+
+Build a local release and run the script against it:
+
+```
+go build -o "$a\rainbow-statusline.exe" .\cmd\rainbow-statusline
+$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'amd64' }
+$zip = "rainbow-statusline_windows_$arch.zip"
+Compress-Archive -Force -LiteralPath "$a\rainbow-statusline.exe" -DestinationPath "$a\$zip"
+"$((Get-FileHash -Algorithm SHA256 "$a\$zip").Hash.ToLower())  $zip" | Set-Content -Encoding ascii "$a\checksums.txt"
+$env:RAINBOW_STATUSLINE_BASE_URL = $a; $env:RAINBOW_STATUSLINE_DIR = "$a\installed"
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+$key.GetValue('Path', $null, $raw)
+$key.GetValueKind('Path')
+powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+$key.GetValue('Path', $null, $raw)
+& "$a\installed\rainbow-statusline.exe" --version
+```
+
+Expected: the script prints `Installed` and `Added ... to your user PATH`. The value is exactly `%USERPROFILE%\rs-one-entry;<TEMP path>\rs-script\installed`, with `%USERPROFILE%` still unexpanded and separated by `;`. The kind is `ExpandString`. The second run does not print `Added` and the value is unchanged. The last command prints `dev`.
+
+Restore, whatever the result was:
+
+```
+if ($null -ne $savedPath) { $key.SetValue('Path', $savedPath, $savedKind) } else { $key.DeleteValue('Path') }
+$key.GetValue('Path', $null, $raw)
+[Environment]::SetEnvironmentVariable('RAINBOW_STATUSLINE_PATH_CHANGED', $null, 'User')
+$key.Close()
+Remove-Item Env:RAINBOW_STATUSLINE_BASE_URL, Env:RAINBOW_STATUSLINE_DIR
+Remove-Item -Recurse -Force $a
+Remove-Item "$env:USERPROFILE\rs-path-backup.txt" -ErrorAction SilentlyContinue
+```
+
+Expected: the printed value is your original PATH. If the window was closed before this ran, your original is in `%USERPROFILE%\rs-path-backup.txt`; set it back with the `SetValue` line above, using `ExpandString`.
+
+Send back: for Part A, the `Compare-Object` output, what each assistant drew and any flash; for Part B, the PATH value and kind after each run, without the rest of your PATH. Scrub your user name from what you paste.
+
+## Stage 6: send back
+
+Working directory: any. Expected: the list of scrubbed files and the text of `info.txt`.
 
 Send the contents of these (all scrubbed; do not send `raw\`):
 
@@ -183,7 +379,7 @@ Get-Content C:\dev\rs-collected\info.txt
 
 - `C:\dev\rs-collected\scrubbed\*.json`
 - `C:\dev\rs-collected\info.txt`
-- the answers: Stage 1 missing paths, Stage 2 what the status line showed, Stage 3 flash yes or no and the `probe.log` lines, Stage 4 questions 1 to 3, Stage 4b the shell Claude Code uses, which commands failed, and which plugin URL form loaded.
+- the answers: Stage 1 missing paths, Stage 2 what the status line showed, Stage 3 flash yes or no and the `probe.log` lines, Stage 4 questions 1 to 3, Stage 4b the shell Claude Code uses, which commands failed, and which plugin URL form loaded, Stage 5 the comparison, the bars and the PATH results.
 
 Before sending, confirm no personal data is left (expected: no output):
 

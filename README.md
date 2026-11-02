@@ -38,6 +38,8 @@ Run the program with no arguments in a terminal:
 rainbow-statusline
 ```
 
+Use Windows Terminal on Windows; it is the supported terminal. Under Git Bash or mintty a bare run sees no terminal on stdin and waits there; press `Ctrl+C` to leave.
+
 The first time, a short guide lists the assistants it finds, lets you pick which items to show and how dense the line is, and shows a live preview. Nothing in your assistants' settings changes until you confirm, and every file is backed up first. If an assistant already has a different status line, the guide shows it and asks before replacing it. Afterwards the same command opens a single configuration screen with a list of items and a live preview; `s` saves.
 
 ## What works where
@@ -49,15 +51,15 @@ The first time, a short guide lists the assistants it finds, lets you pick which
 | Context (tokens, bar, %) | yes | yes | yes |
 | Σout (output tokens) | yes | yes | — |
 | Session cost | yes | yes | — (no USD cost) |
-| Cache read / write | yes | yes | yes (totals) |
+| Cache read / write | yes | yes | — |
 | Cache timer | yes | estimated (`⏱ ~`) | — |
 | Ponytail, Caveman | yes | yes | never shown |
 | RTK, claude-mem session `c:` | yes | yes | — |
 | RTK, claude-mem total `t:` | yes | yes | from the machine-wide data, when installed |
-| macOS | verified | verified | verified |
-| Windows | to be verified | to be verified | to be verified |
+| Verified on macOS | bar compared with the old bar | bar compared with the old bar | through real samples of its input |
+| Verified on Windows | not yet | not yet | not yet |
 
-A dash (`—`) means the assistant does not provide the value or it could not be read. A value that is not a measurement carries a `~`. A percentage outside 0–100, a negative count or an unreadable value is shown as `—`, never clamped. Windows support is built and unit-tested, but the real assistants have not yet been run there, so treat it as unverified until this table says otherwise.
+A dash (`—`) means the assistant does not provide the value or it could not be read. A value that is not a measurement carries a `~`. A percentage outside 0–100, a negative count, an unreadable value, more than a trillion tokens, more than a million USD, or a `t:` total smaller than its `c:` session figure is shown as `—`, never clamped. Windows support is built and unit-tested, but the real assistants have not yet been run there, so treat it as unverified until this table says otherwise.
 
 ## Where every field comes from
 
@@ -68,7 +70,7 @@ A dash (`—`) means the assistant does not provide the value or it could not be
 | `ctx` | Tokens in use over the context size. Used tokens are the latest call's input plus cache read plus cache write. The percentage is the assistant's own figure when it is within 2 points of used/size, otherwise used/size. Green below 50%, yellow below 80%, red from 80%. |
 | `Σout` | Output tokens summed over the session: the largest output count seen per message in the Claude Code transcript (subagents included), or the sum over messages in OpenCode. |
 | `session ~$` | The assistant's own running cost in USD (Claude Code `cost.total_cost_usd`; OpenCode: sum of message costs). It is an estimate, hence the `~`. Copilot reports no USD cost. |
-| `⚡ read / write` | Cache read and write tokens of the latest call (Claude Code, OpenCode) or the session totals (Copilot). |
+| `⚡ read / write` | Cache read and write tokens of the latest call (Claude Code, OpenCode). Copilot reports only session totals, so it shows `cache —`. |
 | `⏱` | Time left on the prompt cache, from the assistant's own expiry (Claude Code). OpenCode gives no expiry, so it is the last reply plus five minutes and is marked `~`. Yellow in the last 40% of the cache life, red in the last minute, `✖ expired` after. The suffix `5m` or `1h` is the cache life. |
 | `[PONYTAIL]`, `[CAVEMAN]` | The plugin's own mode flag file. The badge is hidden when the plugin is missing or off. |
 | RTK `c:` | Tokens saved and percentage for this session: rows of RTK's `history.db` matched to the session through RTK's hook decisions (Claude Code) or the session's bash commands (OpenCode). |
@@ -91,7 +93,14 @@ Run this first, while the program is still installed:
 rainbow-statusline uninstall
 ```
 
-It removes only the entries it added to your assistants' settings and restores the status line you had before. Then remove the package:
+It removes only the entries it added to your assistants' settings and restores the status line you had before. It leaves the program's own files, so running `rainbow-statusline` again opens the configuration screen, and `s` installs it again:
+
+| | macOS | Windows |
+|---|---|---|
+| Configuration, install state and backups (`state/`, `state/backups/`) | `~/Library/Application Support/rainbow-statusline` | `%APPDATA%\rainbow-statusline` |
+| Cache | `~/Library/Caches/rainbow-statusline` | `%LOCALAPPDATA%\rainbow-statusline` |
+
+Delete those folders to remove everything. Then remove the package:
 
 ```
 brew uninstall rainbow-statusline            # macOS, Homebrew
