@@ -144,15 +144,21 @@ func withVariant(b Badge, variant string) Badge {
 func sanitize(l Line) Line {
 	out := make(Line, len(l))
 	for i, s := range l {
-		s.Text = strings.Map(func(r rune) rune {
-			if unicode.IsControl(r) {
-				return '?'
-			}
-			return r
-		}, s.Text)
+		s.Text = Sanitize(s.Text)
 		out[i] = s
 	}
 	return out
+}
+
+// Sanitize replaces what could drive the terminal or disguise text: control
+// runes, invisible formatting such as U+202E, and the Unicode line separators.
+func Sanitize(text string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '\u2028' || r == '\u2029' {
+			return '?'
+		}
+		return r
+	}, text)
 }
 
 // maxStage is the last step of width trimming: 1 drops the cache details,
@@ -253,7 +259,7 @@ func contextPct(s model.Session) (float64, bool) {
 		return 0, false
 	}
 	used, size := float64(*s.ContextUsed), float64(*s.ContextSize)
-	if _, ok := format.Pct(used, size, 1); !ok {
+	if _, ok := format.Pct(used, size, 1); !ok || *s.ContextSize > format.MaxTokens {
 		return 0, false
 	}
 	pct := used * 100 / size
@@ -280,7 +286,7 @@ func bar(pct float64, w int) string {
 }
 
 func cost(c *float64) string {
-	if c == nil || *c < 0 || math.IsNaN(*c) || math.IsInf(*c, 0) {
+	if c == nil || *c < 0 || *c > format.MaxCostUSD || math.IsNaN(*c) {
 		return "$" + format.Dash
 	}
 	return "$" + fixed(*c, 2)
@@ -318,6 +324,14 @@ func cacheSegments(s model.Session, short bool) Line {
 // maxCacheLeft is far beyond any cache TTL; a longer countdown is not believable.
 const maxCacheLeft = 24 * 60 * 60
 
+// cacheSlack allows for clocks that differ a little when checking a countdown against the TTL.
+const cacheSlack = time.Minute
+
+func beyondTTL(left int64, ttl string) bool {
+	d, err := time.ParseDuration(ttl)
+	return err == nil && left > int64((d+cacheSlack)/time.Second)
+}
+
 func timer(s model.Session) Segment {
 	expired := Segment{Text: "✖ expired", FG: red, Bold: true}
 	if s.CacheWarm != nil && !*s.CacheWarm {
@@ -328,7 +342,7 @@ func timer(s model.Session) Segment {
 		return unknown
 	}
 	left := s.CacheExpiresAt.Unix() - Now().Unix()
-	if left > maxCacheLeft {
+	if left > maxCacheLeft || beyondTTL(left, s.CacheTTL) {
 		return unknown
 	}
 	if left <= 0 {
@@ -371,7 +385,7 @@ func optionalK(n *int64) string {
 // format.Tokens' 1.0k and 1.0M.
 func k(n int64) string {
 	switch {
-	case n < 0:
+	case n < 0 || n > format.MaxTokens:
 		return format.Dash
 	case n < 1000:
 		return fmt.Sprint(n)

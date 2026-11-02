@@ -19,8 +19,8 @@ func TestCopilotAfterReplyFields(t *testing.T) {
 	if s.ContextPct == nil || *s.ContextPct != 20 {
 		t.Errorf("pct: %v", s.ContextPct)
 	}
-	if s.CacheRead == nil || *s.CacheRead != 1280 || s.CacheWrite == nil || *s.CacheWrite != 0 {
-		t.Errorf("cache: %v %v", s.CacheRead, s.CacheWrite)
+	if s.CacheRead != nil || s.CacheWrite != nil {
+		t.Errorf("cumulative cache totals must not be read: %v %v", s.CacheRead, s.CacheWrite)
 	}
 	if s.CostUSD != nil || s.Effort != "" || s.CacheWarm != nil || s.CacheExpiresAt != nil || s.CacheTTL != "" {
 		t.Errorf("fields Copilot does not have must stay unknown: %+v", s)

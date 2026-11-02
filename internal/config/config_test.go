@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -121,5 +122,32 @@ func TestMistypedFieldKeepsOthers(t *testing.T) {
 	c, _ := Load()
 	if c.Density != "full" || !reflect.DeepEqual(c.Hidden, []string{"rtk"}) || !reflect.DeepEqual(c.Order, []string{"caveman"}) {
 		t.Errorf("got %+v", c)
+	}
+}
+
+func TestAgentsKeyMissingVersusEmpty(t *testing.T) {
+	dir := t.TempDir()
+	old := ConfigDir
+	ConfigDir = func() (string, error) { return dir, nil }
+	t.Cleanup(func() { ConfigDir = old })
+	p, _ := Path()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(`{"density":"full"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := Load(); c.Agents != nil {
+		t.Errorf("a missing key must stay nil: %#v", c.Agents)
+	}
+	if err := Save(Config{View: View{Density: "full"}, Agents: []string{}}); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(p)
+	if !strings.Contains(string(raw), `"agents": []`) {
+		t.Errorf("an empty list must be saved: %s", raw)
+	}
+	if c, _ := Load(); c.Agents == nil || len(c.Agents) != 0 {
+		t.Errorf("an empty list must load as empty: %#v", c.Agents)
 	}
 }

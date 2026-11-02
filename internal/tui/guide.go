@@ -151,7 +151,7 @@ func (g *guide) next() tea.Cmd {
 }
 
 func (g *guide) selectedIDs() []string {
-	var ids []string
+	ids := []string{}
 	for _, a := range g.agents {
 		if a.selected {
 			ids = append(ids, a.ID)
@@ -243,7 +243,11 @@ func (g *guide) body() string {
 	line := func(s string) { b.WriteString(wrap.Render(s) + "\n") }
 
 	if g.done {
-		line(bold.Render("Done. Restart your assistant to see the bar."))
+		if len(g.selectedIDs()) > 0 {
+			line(bold.Render("Done. Restart your assistant to see the bar."))
+		} else {
+			line(bold.Render("Done. The bar settings are saved; no assistant was changed."))
+		}
 		line("")
 		line(dim.Render("Press any key to leave."))
 		return b.String()
@@ -351,7 +355,7 @@ func (g *guide) summaryStep(line func(string)) {
 	for _, c := range g.changes {
 		if c.Replaces != "" {
 			line("")
-			line(fmt.Sprintf("%s's current status line (%s) will be replaced. A backup is kept, and `rainbow-statusline uninstall` restores it.", g.agentName(c.Agent), c.Replaces))
+			line(fmt.Sprintf("%s's current status line (%s) will be replaced. A backup is kept, and `rainbow-statusline uninstall` restores it.", g.agentName(c.Agent), render.Sanitize(c.Replaces)))
 		}
 	}
 	line("")

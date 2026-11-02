@@ -206,6 +206,15 @@ func savedText(saved, whole int64, ok bool, digits int) string {
 	return format.Saved(saved, whole, digits)
 }
 
+// totalOrDash hides a total smaller than the session it should include; the
+// session's own figure stays.
+func totalOrDash(c, t string, session, total int64) string {
+	if c != format.Dash && session > total {
+		return format.Dash
+	}
+	return t
+}
+
 func badge(name, colour string, c, t string) render.Badge {
 	return render.Badge{Name: name, Lines: []render.Segment{
 		{Text: "[" + name + "]", FG: colour},

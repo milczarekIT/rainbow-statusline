@@ -2,11 +2,14 @@ package adapter
 
 import (
 	"encoding/json"
+	"math"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/milczarekIT/rainbow-statusline/internal/config"
+	"github.com/milczarekIT/rainbow-statusline/internal/format"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 	"github.com/milczarekIT/rainbow-statusline/internal/render"
 )
@@ -154,4 +157,23 @@ func contains(s, sub string) bool { return strings.Contains(s, sub) }
 func jsonString(s string) (string, error) {
 	b, err := json.Marshal(s)
 	return string(b), err
+}
+
+func TestOpenCodeOutputAboveTheCeilingIsUnknown(t *testing.T) {
+	huge := int64(math.MaxInt64)
+	msg := func(out int64) openCodeMessage {
+		var m openCodeMessage
+		m.Tokens.Output = json.RawMessage(strconv.FormatInt(out, 10))
+		m.Tokens.Reasoning = json.RawMessage("0")
+		return m
+	}
+	if got := sumOut([]openCodeMessage{msg(huge), msg(huge)}); got != nil {
+		t.Errorf("overflowing values: %d", *got)
+	}
+	if got := sumOut([]openCodeMessage{msg(format.MaxTokens), msg(format.MaxTokens)}); got != nil {
+		t.Errorf("sum above the ceiling: %d", *got)
+	}
+	if got := sumOut([]openCodeMessage{msg(5), msg(6)}); got == nil || *got != 11 {
+		t.Errorf("ordinary sum: %v", got)
+	}
 }

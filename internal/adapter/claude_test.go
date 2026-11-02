@@ -168,3 +168,34 @@ func TestUnknownAgentIsEmpty(t *testing.T) {
 		t.Errorf("got %+v", s)
 	}
 }
+
+func TestClaudeWrongTypedUsageIsUnknown(t *testing.T) {
+	for _, usage := range []string{
+		`{"input_tokens":"abc"}`,
+		`{"input_tokens":1.5,"cache_read_input_tokens":5}`,
+		`{"input_tokens":5,"cache_read_input_tokens":true}`,
+		`{"input_tokens":5,"cache_creation_input_tokens":[1]}`,
+	} {
+		s := Parse("claude", []byte(`{"context_window":{"context_window_size":200000,"current_usage":`+usage+`}}`))
+		if s.ContextUsed != nil || s.CacheRead != nil || s.CacheWrite != nil {
+			t.Errorf("%s: used %v read %v write %v", usage, s.ContextUsed, s.CacheRead, s.CacheWrite)
+		}
+		if got := draw(t, s); !strings.Contains(got, "ctx \x1b[2m—") {
+			t.Errorf("%s: drew %q", usage, got)
+		}
+	}
+}
+
+func TestClaudeAbsentOrNullUsageFieldsAreZero(t *testing.T) {
+	s := Parse("claude", []byte(`{"context_window":{"context_window_size":200000,"current_usage":{"input_tokens":7,"cache_read_input_tokens":null}}}`))
+	if s.ContextUsed == nil || *s.ContextUsed != 7 || s.CacheRead == nil || *s.CacheRead != 0 || s.CacheWrite == nil || *s.CacheWrite != 0 {
+		t.Errorf("used %v read %v write %v", s.ContextUsed, s.CacheRead, s.CacheWrite)
+	}
+}
+
+func TestClaudeHugeUsageDoesNotOverflow(t *testing.T) {
+	s := Parse("claude", []byte(`{"context_window":{"context_window_size":200000,"current_usage":{"input_tokens":9223372036854775807,"cache_read_input_tokens":9223372036854775807,"cache_creation_input_tokens":2}}}`))
+	if s.ContextUsed != nil {
+		t.Errorf("used: %d", *s.ContextUsed)
+	}
+}

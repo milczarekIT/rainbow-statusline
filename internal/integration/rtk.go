@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/milczarekIT/rainbow-statusline/internal/format"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 	"github.com/milczarekIT/rainbow-statusline/internal/render"
 )
@@ -48,12 +47,10 @@ func (r rtk) Badge(s model.Session) (render.Badge, bool) {
 	if !installed {
 		return offBadge("RTK"), true
 	}
-	c := format.Dash
-	if saved, input, ok := rtkSessionPair(s); ok {
-		c = format.Saved(saved, input, 1)
-	}
-	ts, ti, ok := cachedPair(keyRTKTotal, ageTotal)
-	return badge("RTK", "38;5;141", c, savedText(ts, ti, ok, 1)), true
+	saved, input, ok := rtkSessionPair(s)
+	c := savedText(saved, input, ok, 1)
+	ts, ti, tok := cachedPair(keyRTKTotal, ageTotal)
+	return badge("RTK", "38;5;141", c, totalOrDash(c, savedText(ts, ti, tok, 1), saved, ts)), true
 }
 
 // rtkSessionPair asks the cache for this session's saved and input tokens.

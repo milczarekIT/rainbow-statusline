@@ -67,12 +67,22 @@ function Install-RainbowStatusline {
         }
 
         Write-Host "Installed $target"
-        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-        $entries = if ($userPath) { $userPath -split ';' | Where-Object { $_ } } else { @() }
-        if ($entries -notcontains $dir) {
-            [Environment]::SetEnvironmentVariable('Path', (($entries + $dir) -join ';'), 'User')
-            $env:Path = "$env:Path;$dir"
-            Write-Host "Added $dir to your user PATH. Terminals opened before now need a restart to see it."
+        # The registry, not GetEnvironmentVariable: that expands %VAR% entries, and
+        # writing them back would flatten them for good. @() keeps one entry an array.
+        $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+        try {
+            $userPath = $key.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+            $entries = @($userPath -split ';' | Where-Object { $_ })
+            if ($entries -notcontains $dir) {
+                $key.SetValue('Path', (($entries + $dir) -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+                # A direct registry write tells nobody; clearing an unused variable
+                # this way makes Windows announce the change to new terminals.
+                [Environment]::SetEnvironmentVariable('RAINBOW_STATUSLINE_PATH_CHANGED', $null, 'User')
+                $env:Path = "$env:Path;$dir"
+                Write-Host "Added $dir to your user PATH. Terminals opened before now need a restart to see it."
+            }
+        } finally {
+            $key.Close()
         }
         Write-Host ""
         Write-Host "Next: run  $name  to set it up."

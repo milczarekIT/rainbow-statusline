@@ -756,7 +756,7 @@ func TestCommandWithSpaces(t *testing.T) {
 func TestFileURL(t *testing.T) {
 	for _, tc := range []struct{ goos, path, want string }{
 		{"darwin", "/Users/me/.config/opencode/plugins/rainbow-statusline/tui.tsx", "file:///Users/me/.config/opencode/plugins/rainbow-statusline/tui.tsx"},
-		{"darwin", "/Users/Łu kasz/#1/tui.tsx", "file:///Users/%C5%81u%20kasz/%231/tui.tsx"},
+		{"darwin", "/Users/Żółć Test/#1/tui.tsx", "file:///Users/%C5%BB%C3%B3%C5%82%C4%87%20Test/%231/tui.tsx"},
 		{"windows", `C:\Users\Żółć Test\.config\tui.tsx`, "file:///C:/Users/%C5%BB%C3%B3%C5%82%C4%87%20Test/.config/tui.tsx"},
 		{"windows", `\\srv\share\tui.tsx`, "file://srv/share/tui.tsx"},
 	} {
@@ -994,7 +994,7 @@ func TestUninstallRemovesOnlyFoldersWeCreated(t *testing.T) {
 func TestIsOurCommand(t *testing.T) {
 	for cmd, want := range map[string]bool{
 		`/opt/rainbow-statusline --agent claude`:                            true,
-		`'/Users/Łu k/bin/rainbow-statusline' --agent claude`:               true,
+		`'/Users/Żółć T/bin/rainbow-statusline' --agent claude`:             true,
 		`'/o'\''b/rainbow-statusline' --agent claude`:                       true,
 		`"C:\Program Files (x86)\rs\rainbow-statusline.exe" --agent claude`: true,
 		`/opt/rainbow-statusline --agent copilot`:                           false,
@@ -1051,5 +1051,23 @@ func TestDetectInstalled(t *testing.T) {
 	install(t, "claude", "opencode")
 	if got := installed(); !got["claude"] || !got["opencode"] || got["copilot"] {
 		t.Errorf("after install: %v", got)
+	}
+}
+
+// PowerShell cannot run here, so this keeps the PATH handling from regressing;
+// docs/windows-steps.md runs the script itself on a one-entry PATH.
+func TestInstallPs1KeepsUserPathRaw(t *testing.T) {
+	raw, err := os.ReadFile("../../install.ps1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(raw)
+	for _, want := range []string{"DoNotExpandEnvironmentNames", "RegistryValueKind]::ExpandString", "$entries = @("} {
+		if !strings.Contains(src, want) {
+			t.Errorf("install.ps1 lacks %q", want)
+		}
+	}
+	if strings.Contains(src, "GetEnvironmentVariable('Path'") {
+		t.Error("install.ps1 reads PATH expanded, which flattens %VAR% entries")
 	}
 }

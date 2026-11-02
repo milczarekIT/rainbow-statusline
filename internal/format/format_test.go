@@ -39,3 +39,18 @@ func TestPctRejectsNaN(t *testing.T) {
 		t.Error("Inf whole accepted")
 	}
 }
+
+func TestTokensCeiling(t *testing.T) {
+	if got := Tokens(MaxTokens); got != "1000000.0M" {
+		t.Errorf("at the ceiling: %q", got)
+	}
+	if got := Tokens(MaxTokens + 1); got != Dash {
+		t.Errorf("above the ceiling: %q", got)
+	}
+	if got := Saved(MaxTokens+1, MaxTokens+2, 1); got != Dash {
+		t.Errorf("saved above the ceiling: %q", got)
+	}
+	if got := Saved(5, MaxTokens+1, 1); got != Dash {
+		t.Errorf("whole above the ceiling: %q", got)
+	}
+}

@@ -51,9 +51,6 @@ func (c caveman) Badge(s model.Session) (render.Badge, bool) {
 	if err != nil {
 		return render.Badge{}, false
 	}
-	if s.Agent == "opencode" {
-		raw = strings.TrimSpace(raw) // the plugin it replaces trims its flag
-	}
 	mode := strings.ToLower(strings.TrimSpace(raw))
 	if mode == "off" || !modePattern.MatchString(mode) {
 		return render.Badge{}, false
@@ -63,24 +60,30 @@ func (c caveman) Badge(s model.Session) (render.Badge, bool) {
 		label = "[CAVEMAN:" + strings.ToUpper(mode) + "]"
 	}
 	segs := []render.Segment{{Text: label, FG: cavemanColour}}
-	if strings.TrimRight(raw, "\n") == "full" {
+	if strings.TrimSpace(raw) == "full" {
 		var session int64
 		if s.OutTokens != nil {
 			session = *s.OutTokens
 		}
+		total := cachedCaveTotal(totalKey)
+		c := cavemanSaved(session)
 		segs = append(segs, render.Segment{Text: " "},
-			render.Segment{Text: "(c: " + cavemanSaved(session) + " | t: " + cavemanSaved(cachedCaveTotal(totalKey)) + ")", FG: cavemanColour})
+			render.Segment{Text: "(c: " + c + " | t: " + totalOrDash(c, cavemanSaved(total), session, total) + ")", FG: cavemanColour})
 	}
 	return render.Badge{Name: "CAVEMAN", Lines: segs}, true
 }
 
 // cavemanSaved turns output tokens into the estimated tokens saved, or a dash
-// when there is no output.
+// when there is no output or the estimate is above the ceiling.
 func cavemanSaved(out int64) string {
-	if out <= 0 {
+	if out <= 0 || out > format.MaxTokens { // the bound keeps the float within int64
 		return format.Dash
 	}
-	return "~" + format.Tokens(int64(float64(out)*0.65/0.35))
+	saved := format.Tokens(int64(float64(out) * 0.65 / 0.35))
+	if saved == format.Dash {
+		return saved
+	}
+	return "~" + saved
 }
 
 func cachedCaveTotal(key string) int64 {

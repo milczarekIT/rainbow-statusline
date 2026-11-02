@@ -20,9 +20,35 @@ import (
 	"golang.org/x/term"
 )
 
+// version is set by the release build (.goreleaser.yaml).
+var version = "dev"
+
+const usage = `Rainbow Statusline: one status line for AI coding assistants.
+
+Usage:
+  rainbow-statusline              open the first-run guide, later the configuration screen
+  rainbow-statusline uninstall    remove it from your assistants' settings
+  rainbow-statusline --version    print the version
+  rainbow-statusline --help       print this help
+
+Assistants call it with their session JSON on stdin:
+  rainbow-statusline [--agent claude|copilot|opencode] [--width N] [--format ansi|json]
+`
+
 func main() {
 	// Drawing never crashes and never shows an error on the assistant's screen.
 	defer func() { _ = recover() }()
+
+	if len(os.Args) == 2 {
+		switch os.Args[1] {
+		case "--version", "-version":
+			fmt.Println(version)
+			return
+		case "--help", "-help", "-h":
+			fmt.Print(usage)
+			return
+		}
+	}
 
 	if len(os.Args) == 2 && os.Args[1] == "uninstall" {
 		os.Exit(runUninstall(os.Stdout, os.Stderr))
@@ -39,7 +65,7 @@ func main() {
 	agent := flags.String("agent", "claude", "assistant whose input arrives on stdin")
 	widthFlag := flags.Int("width", 0, "columns available to the status line")
 	outFormat := flags.String("format", "ansi", "ansi, or json for hosts that draw the segments themselves")
-	_ = flags.Parse(os.Args[1:])
+	parseErr := flags.Parse(os.Args[1:])
 
 	info, err := os.Stdin.Stat()
 	if err != nil {
@@ -48,9 +74,14 @@ func main() {
 	if info.Mode()&os.ModeCharDevice != 0 {
 		// Nothing is piped in. Only a person at a terminal, with no flags,
 		// gets the screen; /dev/null or an assistant's terminal draws nothing.
+		stdinTTY, stdoutTTY := term.IsTerminal(int(os.Stdin.Fd())), term.IsTerminal(int(os.Stdout.Fd()))
+		if badArguments(stdinTTY, stdoutTTY, parseErr, flags.NArg()) {
+			fmt.Fprint(os.Stderr, usage)
+			os.Exit(2)
+		}
 		flagsSet := 0
 		flags.Visit(func(*flag.Flag) { flagsSet++ })
-		if wantsScreen(term.IsTerminal(int(os.Stdin.Fd())), term.IsTerminal(int(os.Stdout.Fd())), flagsSet) {
+		if wantsScreen(stdinTTY, stdoutTTY, flagsSet) {
 			cfg, found := config.Load()
 			if err := openUI(found, tui.RunGuide, func() error { return tui.RunScreen(cfg) }); err != nil {
 				fmt.Fprintln(os.Stderr, "rainbow-statusline:", err)
@@ -84,6 +115,12 @@ func main() {
 		return
 	}
 	fmt.Print(render.ANSI(lines))
+}
+
+// badArguments: an argument it does not know is reported only to a person at a
+// terminal. An assistant's call stays silent and exits 0.
+func badArguments(stdinTTY, stdoutTTY bool, parseErr error, extra int) bool {
+	return stdinTTY && stdoutTTY && (parseErr != nil || extra > 0)
 }
 
 // wantsScreen: the configuration screen opens for a person running the bare

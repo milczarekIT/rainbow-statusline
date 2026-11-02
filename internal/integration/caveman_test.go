@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/milczarekIT/rainbow-statusline/internal/cache"
+	"github.com/milczarekIT/rainbow-statusline/internal/format"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 	"github.com/milczarekIT/rainbow-statusline/internal/render"
 )
@@ -93,8 +95,8 @@ func TestCavemanTotalNotYetComputed(t *testing.T) {
 }
 
 func TestCavemanFullIsExactlyFull(t *testing.T) {
-	// The old bar compared the raw flag: only "full" (trailing newlines aside) shows numbers.
-	for _, flag := range []string{"FULL", " full", "full x"} {
+	// Only "full", surrounding whitespace aside, shows numbers.
+	for _, flag := range []string{"FULL", "full x"} {
 		e := cavemanSetup(t, flag)
 		e.canned[keyCaveTotal] = "100"
 		if got := text(first(caveBadge(i64(100)))); strings.Contains(got, "c:") {
@@ -390,5 +392,34 @@ func TestCavemanTotalStatErrorOtherThanMissingFails(t *testing.T) {
 	}
 	if v, err := computeCaveTotal(t.Context()); err != nil || string(v) != "100" {
 		t.Fatalf("vanished file: %q %v", v, err)
+	}
+}
+
+func TestCavemanSessionAboveTheTotalHidesTheTotal(t *testing.T) {
+	e := cavemanSetup(t, "full")
+	e.canned[keyCaveTotal] = "100"
+	b, _ := caveBadge(i64(84100))
+	if want := "[CAVEMAN] (c: ~156.2k | t: —)"; text(b) != want {
+		t.Fatalf("got %q want %q", text(b), want)
+	}
+}
+
+func TestCavemanFullFlagWithCRLF(t *testing.T) {
+	e := cavemanSetup(t, "full\r\n")
+	e.canned[keyCaveTotal] = "84100"
+	b, _ := caveBadge(i64(84100))
+	if want := "[CAVEMAN] (c: ~156.2k | t: ~156.2k)"; text(b) != want {
+		t.Fatalf("got %q want %q", text(b), want)
+	}
+}
+
+func TestCavemanSavedAboveTheCeilingIsADash(t *testing.T) {
+	for _, out := range []int64{math.MaxInt64, format.MaxTokens + 1, format.MaxTokens} {
+		if got := cavemanSaved(out); got != format.Dash {
+			t.Errorf("cavemanSaved(%d) = %q", out, got)
+		}
+	}
+	if got := cavemanSaved(84100); got != "~156.2k" {
+		t.Errorf("ordinary value: %q", got)
 	}
 }

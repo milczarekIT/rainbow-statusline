@@ -168,3 +168,12 @@ func TestRTKCopilotHasTotalOnly(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestRTKSessionAboveTheTotalHidesTheTotal(t *testing.T) {
+	e := setup(t)
+	seedRTK(t, e, 570, 2000)
+	e.canned[keyRTKTotal] = "1000 10000"
+	if got, want := text(first(rtk{}.Badge(claudeSession()))), "[RTK] (c: 1.1k · 28.5% | t: —)"; got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}

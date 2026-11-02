@@ -25,18 +25,19 @@ import (
 const (
 	claudeMemPlugin = "claude-mem@thedotmack"
 	workerBase      = "http://127.0.0.1:37777"
-	maxTokens       = 1e12
 )
 
 var (
 	// claudeMemDir and claudeSettings are replaced in tests.
 	claudeMemDir   = func() string { h, _ := homeDir(); return filepath.Join(h, ".claude-mem") }
-	claudeSettings = func() string { h, _ := homeDir(); return filepath.Join(h, ".claude", "settings.json") }
+	claudeSettings = defaultClaudeSettings
 	workerURL      = workerBase
 
 	ansiPattern  = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	statsPattern = regexp.MustCompile(`([0-9,]+)t work \| ([0-9,]+)t saved`)
 )
+
+func defaultClaudeSettings() string { return filepath.Join(claudeDir(), "settings.json") }
 
 type claudeMem struct{}
 
@@ -69,7 +70,8 @@ func (m claudeMem) Badge(s model.Session) (render.Badge, bool) {
 	}
 	saved, work, ok := memSessionPair(s)
 	ts, tw, tok := cachedPair(keyMemTotal, ageTotal)
-	return badge("CLAUDE-MEM", "38;5;75", memText(saved, work, ok), memText(ts, tw, tok)), true
+	c := memText(saved, work, ok)
+	return badge("CLAUDE-MEM", "38;5;75", c, totalOrDash(c, memText(ts, tw, tok), saved, ts)), true
 }
 
 // memText is claude-mem's own display: nothing saved or nothing worked is a dash.
@@ -226,7 +228,7 @@ func applyLine(line []byte, byID map[string]int64, saved, work *int64) {
 		}
 		var n int64
 		if o := e.Message.Usage.Output; o != nil {
-			if math.IsNaN(*o) || math.IsInf(*o, 0) || *o > maxTokens {
+			if math.IsNaN(*o) || math.IsInf(*o, 0) || *o > format.MaxTokens {
 				return
 			}
 			if *o > 0 {

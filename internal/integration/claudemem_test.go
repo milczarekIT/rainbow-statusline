@@ -42,9 +42,14 @@ func TestMemTotal(t *testing.T) {
 	seedMem(t, e)
 	s := model.Session{Agent: "claude", SessionID: "s1", TranscriptPath: writeTranscript(t, e)}
 	b, ok := claudeMem{}.Badge(s)
-	// total: 1000 - 20 = 980 saved of 1000 worked; session: 176,374 of 195,257
-	if want := "[CLAUDE-MEM] (c: 176.4k · 90% | t: 980 · 98%)"; !ok || text(b) != want {
+	// total: 1000 - 20 = 980 saved of 1000 worked; session: 176,374 of 195,257,
+	// more than the total, so the total is not believable
+	if want := "[CLAUDE-MEM] (c: 176.4k · 90% | t: —)"; !ok || text(b) != want {
 		t.Fatalf("got %q want %q", text(b), want)
+	}
+	s.TranscriptPath = ""
+	if want := "[CLAUDE-MEM] (c: — | t: 980 · 98%)"; text(first(claudeMem{}.Badge(s))) != want {
+		t.Fatalf("got %q want %q", text(first(claudeMem{}.Badge(s))), want)
 	}
 	if strings.Contains(text(b), "~") {
 		t.Fatal("claude-mem t: carries ~")
@@ -100,7 +105,7 @@ func TestMemInjectFromWorker(t *testing.T) {
 	var gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.RawQuery
-		_, _ = w.Write([]byte("Stats: 10 | 2,000t work | 1,000t saved | 50%"))
+		_, _ = w.Write([]byte("Stats: 10 | 200t work | 100t saved | 50%"))
 	}))
 	defer srv.Close()
 	old := workerURL
@@ -108,7 +113,7 @@ func TestMemInjectFromWorker(t *testing.T) {
 	defer func() { workerURL = old }()
 	ocInstall(t, e, "claude-mem")
 	s := model.Session{Agent: "opencode", SessionID: "ses_1", Cwd: "/a b/c"}
-	if got := text(first(claudeMem{}.Badge(s))); got != "[CLAUDE-MEM] (c: 1.0k · 50% | t: 980 · 98%)" {
+	if got := text(first(claudeMem{}.Badge(s))); got != "[CLAUDE-MEM] (c: 100 · 50% | t: 980 · 98%)" {
 		t.Fatalf("got %q", got)
 	}
 	if !strings.Contains(gotQuery, "platformSource=opencode") || !strings.Contains(gotQuery, "cwd=%2Fa+b%2Fc") {
@@ -128,5 +133,13 @@ func TestMemCopilotHasTotalOnly(t *testing.T) {
 	e.memDir = filepath.Join(e.dir, "absent")
 	if got := text(first(claudeMem{}.Badge(s))); got != "[CLAUDE-MEM off]" {
 		t.Fatalf("no data dir: %q", got)
+	}
+}
+
+func TestMemSettingsFollowClaudeConfigDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	if got, want := defaultClaudeSettings(), filepath.Join(dir, "settings.json"); got != want {
+		t.Fatalf("got %q want %q", got, want)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/milczarekIT/rainbow-statusline/internal/format"
 	"github.com/milczarekIT/rainbow-statusline/internal/model"
 )
 
@@ -65,11 +66,15 @@ func parseClaude(stdin []byte) model.Session {
 		s.Cwd = in.Cwd
 	}
 	if u := optional[claudeUsage](in.ContextWindow.CurrentUsage); u != nil {
-		read, write := orZero(u.CacheRead), orZero(u.CacheWrite)
-		s.CacheRead, s.CacheWrite = &read, &write
-		if input := orZero(u.Input); input >= 0 && read >= 0 && write >= 0 {
-			used := input + read + write
-			s.ContextUsed = &used
+		input, okInput := countOrZero(u.Input)
+		read, okRead := countOrZero(u.CacheRead)
+		write, okWrite := countOrZero(u.CacheWrite)
+		if okInput && okRead && okWrite { // one wrong type makes the whole usage unknown
+			s.CacheRead, s.CacheWrite = &read, &write
+			if plausible(input) && plausible(read) && plausible(write) {
+				used := input + read + write
+				s.ContextUsed = &used
+			}
 		}
 	}
 	if pc := optional[claudeCache](in.PromptCache); pc != nil {
@@ -100,9 +105,21 @@ func optional[T any](raw json.RawMessage) *T {
 	return v
 }
 
-func orZero(raw json.RawMessage) int64 {
-	if v := optional[int64](raw); v != nil {
-		return *v
+// countOrZero is 0 for an absent or null value; ok is false for anything else
+// that is not an integer.
+func countOrZero(raw json.RawMessage) (n int64, ok bool) {
+	if len(raw) == 0 {
+		return 0, true
 	}
-	return 0
+	var v *int64
+	if json.Unmarshal(raw, &v) != nil {
+		return 0, false
+	}
+	if v == nil {
+		return 0, true
+	}
+	return *v, true
 }
+
+// plausible also keeps sums of counts from overflowing.
+func plausible(n int64) bool { return n >= 0 && n <= format.MaxTokens }

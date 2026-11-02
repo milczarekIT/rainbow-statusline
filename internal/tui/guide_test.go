@@ -421,3 +421,51 @@ func TestGuideDoneQuitsOnAnyKey(t *testing.T) {
 		t.Error("any key leaves")
 	}
 }
+
+func TestGuideUntickedAllThenScreenSaveWritesNoAssistantSettings(t *testing.T) {
+	home := sandbox(t)
+	mkdir(t, filepath.Join(home, ".claude"))
+	agents := []install.Agent{{ID: "claude", Name: "Claude Code", Found: true}}
+	g := newGuide(config.Config{}, allPlugins(), agents)
+	g.Update(tea.WindowSizeMsg{Width: screenWidth, Height: screenHeight})
+	pressG(g, "space", "enter", "enter", "enter")
+	pressG(g, "enter")
+	if !g.done {
+		t.Fatalf("guide not done:\n%s", body(g))
+	}
+	if b := plain(body(g)); strings.Contains(b, "Restart") {
+		t.Errorf("no assistant was selected, nothing to restart:\n%s", b)
+	}
+	cfg, found := config.Load()
+	if !found || cfg.Agents == nil || len(cfg.Agents) != 0 {
+		t.Fatalf("config: %v %#v", found, cfg.Agents)
+	}
+	m := newScreen(cfg, allPlugins(), agents)
+	m.Update(tea.WindowSizeMsg{Width: screenWidth, Height: screenHeight})
+	press(m, "s")
+	if _, err := os.Stat(filepath.Join(home, ".claude", "settings.json")); !os.IsNotExist(err) {
+		t.Errorf("assistant settings written (err=%v)", err)
+	}
+}
+
+func TestReplacedStatusLineIsSanitized(t *testing.T) {
+	home := sandbox(t)
+	write := []byte(`{"statusLine":{"type":"command","command":"evil\u202ebar"}}`)
+	mkdir(t, filepath.Join(home, ".claude"))
+	if err := os.WriteFile(filepath.Join(home, ".claude", "settings.json"), write, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	agents := []install.Agent{{ID: "claude", Name: "Claude Code", Found: true}}
+	g := newGuide(config.Config{}, allPlugins(), agents)
+	g.Update(tea.WindowSizeMsg{Width: screenWidth, Height: screenHeight})
+	pressG(g, "enter", "enter", "enter")
+	if b := body(g); strings.Contains(b, "\u202e") || !strings.Contains(plain(b), "evil?bar") {
+		t.Errorf("guide:\n%q", b)
+	}
+	m := newScreen(config.Config{}, allPlugins(), agents)
+	m.Update(tea.WindowSizeMsg{Width: screenWidth, Height: screenHeight})
+	press(m, "s")
+	if strings.Contains(m.footer, "\u202e") || !strings.Contains(m.footer, "evil?bar") {
+		t.Errorf("screen footer: %q", m.footer)
+	}
+}

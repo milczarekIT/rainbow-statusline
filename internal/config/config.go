@@ -9,7 +9,9 @@ import (
 // Config is the whole configuration file.
 type Config struct {
 	View
-	Agents []string `json:"agents,omitempty"`
+	// Agents is the assistants chosen on the last save. Nil means never chosen;
+	// empty means the user chose none.
+	Agents []string `json:"agents"`
 }
 
 // ConfigDir finds the user's config directory; tests replace it.

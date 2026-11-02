@@ -76,7 +76,7 @@ func newScreen(cfg config.Config, plugins map[string]bool, agents []install.Agen
 	}
 	for _, a := range agents {
 		sel := chosen[a.ID]
-		if len(cfg.Agents) == 0 {
+		if cfg.Agents == nil {
 			sel = a.Found
 		}
 		sel = sel && a.Found
@@ -257,7 +257,7 @@ func (m *screen) move(d int) {
 }
 
 func (m *screen) selectedIDs() []string {
-	var ids []string
+	ids := []string{}
 	for _, a := range m.agents {
 		if a.selected {
 			ids = append(ids, a.ID)
@@ -288,7 +288,7 @@ func (m *screen) save() {
 	var replaced []string
 	for _, c := range changes {
 		if c.Replaces != "" {
-			replaced = append(replaced, fmt.Sprintf("%s's current status line (%s)", m.agentName(c.Agent), c.Replaces))
+			replaced = append(replaced, fmt.Sprintf("%s's current status line (%s)", m.agentName(c.Agent), render.Sanitize(c.Replaces)))
 		}
 	}
 	if len(replaced) > 0 {

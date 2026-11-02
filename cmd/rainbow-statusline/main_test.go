@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -203,5 +204,55 @@ func TestOpenUIGuideOnlyWithoutConfig(t *testing.T) {
 	_ = openUI(true, guide, screen)
 	if strings.Join(ran, ",") != "guide,screen" {
 		t.Errorf("ran %v", ran)
+	}
+}
+
+func TestVersionAndHelpPrint(t *testing.T) {
+	if got := strings.TrimSpace(string(runBinary(t, "", "--version"))); got != "dev" {
+		t.Errorf("--version: %q", got)
+	}
+	for _, arg := range []string{"--help", "-h"} {
+		if got := string(runBinary(t, "", arg)); !strings.Contains(got, "Usage:") || !strings.Contains(got, "uninstall") {
+			t.Errorf("%s: %q", arg, got)
+		}
+	}
+}
+
+func TestVersionComesFromLdflags(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "rainbow-statusline")
+	if out, err := exec.Command("go", "build", "-ldflags", "-X main.version=9.9.9", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	out, err := exec.Command(bin, "--version").Output()
+	if err != nil || strings.TrimSpace(string(out)) != "9.9.9" {
+		t.Errorf("got %q, %v", out, err)
+	}
+}
+
+func TestUnknownArgumentStaysSilentWhenAnAssistantRunsIt(t *testing.T) {
+	out := runBinary(t, "{}", "--bogus")
+	if strings.Contains(string(out), "Usage:") {
+		t.Errorf("usage printed to an assistant: %q", out)
+	}
+}
+
+func TestBadArguments(t *testing.T) {
+	bad := errors.New("flag provided but not defined")
+	cases := []struct {
+		stdinTTY, stdoutTTY bool
+		err                 error
+		extra               int
+		want                bool
+	}{
+		{true, true, bad, 0, true},
+		{true, true, nil, 1, true},
+		{true, true, nil, 0, false},
+		{false, true, bad, 0, false},
+		{true, false, nil, 1, false},
+	}
+	for _, c := range cases {
+		if got := badArguments(c.stdinTTY, c.stdoutTTY, c.err, c.extra); got != c.want {
+			t.Errorf("%+v: got %v", c, got)
+		}
 	}
 }

@@ -158,7 +158,7 @@ func TestCacheTimer(t *testing.T) {
 		want Segment
 	}{
 		{30 * time.Minute, "1h", Segment{Text: "⏱ 30:00", FG: "32"}},
-		{90*time.Minute + 5*time.Second, "1h", Segment{Text: "⏱ 1:30:05", FG: "32"}},
+		{time.Hour + 30*time.Second, "1h", Segment{Text: "⏱ 1:00:30", FG: "32"}},
 		{24 * time.Minute, "1h", Segment{Text: "⏱ 24:00", FG: "33"}},
 		{2 * time.Minute, "5m", Segment{Text: "⏱ 2:00", FG: "33"}},
 		{3 * time.Minute, "5m", Segment{Text: "⏱ 3:00", FG: "32"}},
@@ -474,5 +474,72 @@ func TestCacheVariantTimer(t *testing.T) {
 	}
 	if def := last(Draw(s, nil, config.View{Variants: map[string]string{"cache": "full"}}, 0)); !strings.Contains(def, "read") {
 		t.Errorf("full: got %q", def)
+	}
+}
+
+func TestValuesAboveTheCeilingRenderADash(t *testing.T) {
+	freeze(t)
+	s := fullSession()
+	s.CostUSD = ptr(1e30)
+	s.OutTokens = ptr[int64](9_000_000_000_000_000)
+	s.CacheRead = ptr[int64](9_000_000_000_000_000)
+	got := text(statsLine(s, 0, config.View{}))
+	for _, bad := range []string{"1000000000000000019884624838656", "9000000000000k"} {
+		if strings.Contains(got, bad) {
+			t.Errorf("%q in %q", bad, got)
+		}
+	}
+	for _, want := range []string{"$—", "Σout —", "read —"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %q", want, got)
+		}
+	}
+	if got := cost(ptr(1e6)); got != "$1000000.00" {
+		t.Errorf("cost at the ceiling: %q", got)
+	}
+	if got := cost(ptr(1e6 + 1)); got != "$—" {
+		t.Errorf("cost above the ceiling: %q", got)
+	}
+}
+
+func TestContextAboveTheCeilingIsUnknown(t *testing.T) {
+	s := fullSession()
+	s.ContextPct = nil
+	s.ContextUsed, s.ContextSize = ptr[int64](9_000_000_000_000_000), ptr[int64](9_000_000_000_000_000)
+	if got := text(contextSegments(s, false)); got != "ctx —" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestCountdownBeyondTheTTLIsUnknown(t *testing.T) {
+	freeze(t)
+	for _, c := range []struct {
+		ttl  string
+		left time.Duration
+		want string
+	}{
+		{"5m", 22*time.Hour + 46*time.Minute + 39*time.Second, "⏱ —"},
+		{"5m", 6*time.Minute + time.Second, "⏱ —"},
+		{"5m", 6 * time.Minute, "⏱ 6:00"},
+		{"1h", 61*time.Minute + time.Second, "⏱ —"},
+		{"1h", 30 * time.Minute, "⏱ 30:00"},
+		{"", 30 * time.Minute, "⏱ 30:00"},
+		{"", 25 * time.Hour, "⏱ —"},
+	} {
+		at := fixedNow.Add(c.left)
+		if got := timer(model.Session{CacheExpiresAt: &at, CacheTTL: c.ttl}).Text; got != c.want {
+			t.Errorf("ttl %q left %v: got %q want %q", c.ttl, c.left, got, c.want)
+		}
+	}
+}
+
+func TestSanitizeReplacesInvisibleFormatting(t *testing.T) {
+	for _, r := range []string{"‮", "​", "⁦", " ", " ", "\x1b", "\n"} {
+		if got := Sanitize("a" + r + "b"); got != "a?b" {
+			t.Errorf("%q: got %q", r, got)
+		}
+	}
+	if got := Sanitize("Łódź — ⚡ ok"); got != "Łódź — ⚡ ok" {
+		t.Errorf("ordinary text changed: %q", got)
 	}
 }

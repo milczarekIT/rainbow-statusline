@@ -114,9 +114,9 @@ func openCodeBash(raw []json.RawMessage) []model.BashRun {
 	return runs
 }
 
-// token is a count that is present and not negative.
+// token is a count that is present, not negative and within the ceiling.
 func token(raw json.RawMessage) *int64 {
-	if v := optional[int64](raw); v != nil && *v >= 0 {
+	if v := optional[int64](raw); v != nil && plausible(*v) {
 		return v
 	}
 	return nil
@@ -138,7 +138,9 @@ func sumOut(msgs []openCodeMessage) *int64 {
 		if o == nil || r == nil {
 			return nil
 		}
-		total += *o + *r
+		if total += *o + *r; total > format.MaxTokens {
+			return nil
+		}
 	}
 	if total == 0 {
 		return nil
