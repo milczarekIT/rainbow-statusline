@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -237,7 +238,7 @@ func TestCavemanTotalReusesTheMtimeIndex(t *testing.T) {
 	if err != nil || !strings.Contains(string(raw), a+"\t") {
 		t.Fatalf("index not written: %q %v", raw, err)
 	}
-	if info, _ := os.Stat(idx); info.Mode().Perm()&0o077 != 0 {
+	if info, _ := os.Stat(idx); runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		t.Errorf("index is not owner-only: %v", info.Mode())
 	}
 	if m, _ := filepath.Glob(filepath.Join(e.dir, "in", "cave-files.tsv.*")); len(m) != 0 {
