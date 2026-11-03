@@ -1063,7 +1063,7 @@ func TestDetectInstalled(t *testing.T) {
 }
 
 // PowerShell cannot run here, so this keeps the PATH handling from regressing;
-// docs/windows-steps.md runs the script itself on a one-entry PATH.
+// running the script itself on Windows with a one-entry PATH is still a manual check.
 func TestInstallPs1KeepsUserPathRaw(t *testing.T) {
 	raw, err := os.ReadFile("../../install.ps1")
 	if err != nil {
