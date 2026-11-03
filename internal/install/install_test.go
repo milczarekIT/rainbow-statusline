@@ -14,10 +14,18 @@ import (
 	"github.com/milczarekIT/rainbow-statusline/internal/config"
 )
 
-const (
-	fakeBin = "/opt/rs/rainbow-statusline"
-	ourCmd  = fakeBin + " --agent claude"
-)
+const fakeBin = "/opt/rs/rainbow-statusline"
+
+// ourCmd is what an install writes on this OS: on Windows the path is quoted for cmd.exe.
+var ourCmd = commandFor(fakeBin, "claude")
+
+func commandFor(bin, id string) string {
+	cmd, err := shellCommand(runtime.GOOS, bin, "--agent", id)
+	if err != nil {
+		panic(err)
+	}
+	return cmd
+}
 
 // sandbox points every root at a temp dir. No test may reach the owner's files.
 func sandbox(t *testing.T) string {
@@ -139,7 +147,7 @@ func backups(t *testing.T, home string) []string {
 	return out
 }
 
-const statusEntry = `"statusLine": {"type":"command","command":"` + ourCmd + `","padding":0,"refreshInterval":1}`
+var statusEntry = `"statusLine": {"type":"command","command":` + jsonString(ourCmd) + `,"padding":0,"refreshInterval":1}`
 
 func TestInstallKeepsOtherKeys(t *testing.T) {
 	home := sandbox(t)
@@ -329,7 +337,7 @@ func TestReinstallWithNewBinaryKeepsFirstOriginal(t *testing.T) {
 	if c := install(t, "claude"); c[0].Replaces != "" {
 		t.Errorf("Replaces = %q", c[0].Replaces)
 	}
-	if !strings.Contains(get(t, p), "/new/rainbow-statusline --agent claude") {
+	if !strings.Contains(get(t, p), jsonString(commandFor("/new/rainbow-statusline", "claude"))) {
 		t.Errorf("not updated: %s", get(t, p))
 	}
 	uninstall(t)
@@ -561,7 +569,7 @@ func TestMissingSettingsCreatedOnlyWhenDetected(t *testing.T) {
 		t.Fatal(err)
 	}
 	install(t, "claude")
-	if !strings.Contains(get(t, p), ourCmd) {
+	if !strings.Contains(get(t, p), jsonString(ourCmd)) {
 		t.Errorf("got %s", get(t, p))
 	}
 	uninstall(t)
@@ -627,7 +635,7 @@ func TestCopilotUsesSettingsJSONOnly(t *testing.T) {
 	if len(c) != 1 || c[0].Path != p {
 		t.Fatalf("%+v", c)
 	}
-	if got := get(t, p); !strings.Contains(got, `"command":"`+fakeBin+` --agent copilot"`) || !strings.Contains(got, `"refreshInterval":1`) {
+	if got := get(t, p); !strings.Contains(got, `"command":`+jsonString(commandFor(fakeBin, "copilot"))) || !strings.Contains(got, `"refreshInterval":1`) {
 		t.Errorf("got %s", got)
 	}
 	if got := get(t, filepath.Join(dir, "config.json")); got != cfg {
@@ -823,7 +831,7 @@ func TestUninstallWithLostStateRemovesOurEntry(t *testing.T) {
 			if strings.Contains(out, "nothing to uninstall") {
 				t.Errorf("report = %s", out)
 			}
-			if !strings.Contains(strings.Join(backups(t, home), "|"), ourCmd) {
+			if !strings.Contains(strings.Join(backups(t, home), "|"), jsonString(ourCmd)) {
 				t.Error("no backup of the file holding our entry")
 			}
 			if out := uninstall(t); !strings.Contains(out, "nothing to uninstall") {
@@ -869,7 +877,7 @@ func TestLostStateLeavesWhatIsNotOurs(t *testing.T) {
 func TestLostStateBrokenFileWithOurNameRefused(t *testing.T) {
 	home := sandbox(t)
 	p := filepath.Join(home, ".claude", "settings.json")
-	body := "// x\n" + `{"statusLine":{"command":"` + ourCmd + `"}}`
+	body := "// x\n" + `{"statusLine":{"command":` + jsonString(ourCmd) + `}}`
 	put(t, p, body)
 	if err := Uninstall(); err == nil || !strings.Contains(err.Error(), p) {
 		t.Fatalf("err = %v", err)

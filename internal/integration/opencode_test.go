@@ -47,12 +47,14 @@ func TestOCPluginInstalledWhenListedOrInPluginsDir(t *testing.T) {
 }
 
 func TestOpenCodeDirHonoursXDG(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", filepath.FromSlash("/x/cfg"))
-	if got := defaultOpenCodeDir(); got != filepath.FromSlash("/x/cfg/opencode") {
+	// On Windows only a path with a drive is absolute: Abs adds the current one.
+	abs := func(p string) string { a, _ := filepath.Abs(filepath.FromSlash(p)); return a }
+	t.Setenv("XDG_CONFIG_HOME", abs("/x/cfg"))
+	if got := defaultOpenCodeDir(); got != abs("/x/cfg/opencode") {
 		t.Fatalf("got %q", got)
 	}
-	t.Setenv("XDG_DATA_HOME", filepath.FromSlash("/x/data"))
-	if got := defaultOpenCodeDB(); got != filepath.FromSlash("/x/data/opencode/opencode.db") {
+	t.Setenv("XDG_DATA_HOME", abs("/x/data"))
+	if got := defaultOpenCodeDB(); got != abs("/x/data/opencode/opencode.db") {
 		t.Fatalf("got %q", got)
 	}
 	// A relative value could point into a project folder.

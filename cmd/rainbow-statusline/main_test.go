@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -40,10 +41,19 @@ func TestResolveWidth(t *testing.T) {
 	}
 }
 
+// binPath is where a test builds the tool; Windows only runs files ending in .exe.
+func binPath(t *testing.T) string {
+	name := "rainbow-statusline"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	return filepath.Join(t.TempDir(), name)
+}
+
 // runBinary builds the tool once per test and runs it in an empty home.
 func runBinary(t *testing.T, stdin string, args ...string) []byte {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "rainbow-statusline")
+	bin := binPath(t)
 	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
@@ -155,7 +165,7 @@ func TestRunUninstallTurnsPanicIntoExitOne(t *testing.T) {
 }
 
 func TestNullStdinDrawsNothingAndExitsZero(t *testing.T) {
-	bin := filepath.Join(t.TempDir(), "rainbow-statusline")
+	bin := binPath(t)
 	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
@@ -219,7 +229,7 @@ func TestVersionAndHelpPrint(t *testing.T) {
 }
 
 func TestVersionComesFromLdflags(t *testing.T) {
-	bin := filepath.Join(t.TempDir(), "rainbow-statusline")
+	bin := binPath(t)
 	if out, err := exec.Command("go", "build", "-ldflags", "-X main.version=9.9.9", "-o", bin, ".").CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
