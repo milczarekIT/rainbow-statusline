@@ -22,7 +22,7 @@ const (
 
 var fixedNow = time.Unix(1793566870, 0)
 
-// sandbox points every root at a temp dir: no test may reach the owner's files.
+// sandbox points every root at a temp dir: no test may reach the user's real files.
 func sandbox(t *testing.T) (home string) {
 	t.Helper()
 	home = t.TempDir()

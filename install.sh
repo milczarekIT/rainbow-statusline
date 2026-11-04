@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs Rainbow Statusline for the current user (macOS). No sudo, no shell
+# Installs Rainbow Statusline for the current user (macOS, Linux). No sudo, no shell
 # profile edits: if the install folder is not on PATH, the line to add is printed.
 #
 #   curl -fsSL https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.sh | sh
@@ -23,7 +23,8 @@ die() {
 main() {
 	case "$(uname -s)" in
 	Darwin) os=darwin ;;
-	*) die "this script supports macOS only; on Windows use install.ps1" ;;
+	Linux) os=linux ;;
+	*) die "this script supports macOS and Linux; on Windows use install.ps1" ;;
 	esac
 	case "$(uname -m)" in
 	arm64 | aarch64) arch=arm64 ;;
@@ -51,17 +52,18 @@ main() {
 		# $secure is left unquoted on purpose: it is two options or nothing.
 		# shellcheck disable=SC2086
 		curl -fsSL $secure -o "$tmp/$1" "$base/$1" ||
-			die "could not download $base/$1
-	Anonymous download works only once the repository is public. For a private
-	repository, use the GitHub CLI instead:
-	  gh release download --repo $repo --pattern '${name}_${os}_${arch}.tar.gz' --pattern checksums.txt"
+			die "could not download $base/$1"
 	}
 	fetch "$archive"
 	fetch checksums.txt
 
 	want="$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")"
 	[ -n "$want" ] || die "checksums.txt has no entry for $archive"
-	got="$(shasum -a 256 "$tmp/$archive" | awk '{ print $1 }')"
+	if command -v sha256sum >/dev/null 2>&1; then
+		got="$(sha256sum "$tmp/$archive" | awk '{ print $1 }')"
+	else
+		got="$(shasum -a 256 "$tmp/$archive" | awk '{ print $1 }')"
+	fi
 	[ "$want" = "$got" ] || die "checksum mismatch for $archive (expected $want, got $got); nothing was installed"
 
 	tar -xzf "$tmp/$archive" -C "$tmp" "$name" || die "could not unpack $archive"
@@ -77,7 +79,7 @@ main() {
 	*":$dir:"*) ;;
 	*)
 		# shellcheck disable=SC2016 # the $PATH in the printed line must stay literal
-		printf '\n%s is not on your PATH. Add this line to your shell profile (for zsh, ~/.zshrc):\n  export PATH="%s:$PATH"\n' "$dir" "$dir"
+		printf '\n%s is not on your PATH. Add this line to your shell profile (~/.zshrc for zsh, ~/.bashrc for bash):\n  export PATH="%s:$PATH"\n' "$dir" "$dir"
 		;;
 	esac
 	printf '\nNext: run  %s  to set it up.\n' "$dir/$name"

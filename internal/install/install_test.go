@@ -27,7 +27,7 @@ func commandFor(bin, id string) string {
 	return cmd
 }
 
-// sandbox points every root at a temp dir. No test may reach the owner's files.
+// sandbox points every root at a temp dir. No test may reach the user's real files.
 func sandbox(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()

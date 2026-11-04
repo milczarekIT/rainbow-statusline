@@ -43,10 +43,7 @@ function Install-RainbowStatusline {
                         Invoke-WebRequest -UseBasicParsing -Uri "$base/$file" -OutFile $out
                     }
                 } catch {
-                    throw ("could not download $base/$file`n" +
-                        "Anonymous download works only once the repository is public. For a private`n" +
-                        "repository, use the GitHub CLI instead:`n" +
-                        "  gh release download --repo $repo --pattern '$archive' --pattern checksums.txt")
+                    throw "could not download $base/$file"
                 }
             }
 

@@ -14,7 +14,7 @@ import (
 func ptr[T any](v T) *T { return &v }
 
 // DemoSession is the made-up session the preview draws. It never reads an
-// assistant's data; the numbers are the spec's example.
+// assistant's data; the numbers are made up.
 func DemoSession() model.Session {
 	expires := render.Now().Add(2*time.Minute + 32*time.Second)
 	return model.Session{
@@ -34,7 +34,7 @@ func pair(name, colour, c, t string) render.Badge {
 	}}
 }
 
-// demoBadges are the four badges with the spec's example figures.
+// demoBadges are the four badges with made-up figures.
 func demoBadges() []render.Badge {
 	return []render.Badge{
 		{Name: "PONYTAIL", Lines: []render.Segment{{Text: "[PONYTAIL]", FG: "38;5;108"}}},
