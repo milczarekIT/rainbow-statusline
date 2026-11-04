@@ -28,7 +28,7 @@ The workflow pins its actions by commit SHA and GoReleaser by exact version; upd
 
 ## Pre-release while the repository is private
 
-For the owner to run later; nothing here has been run:
+For the maintainer to run later; nothing here has been run:
 
 ```
 git tag v0.1.0-rc.1 && git push origin v0.1.0-rc.1
@@ -38,13 +38,7 @@ gh release download v0.1.0-rc.1 --repo milczarekIT/rainbow-statusline --dir /tmp
 
 The anonymous paths (`curl`, `irm`, `brew`, `scoop`) can only be verified once the repository is public.
 
-## Publication checklist
+## Still open
 
-Not done yet; the owner does these before the repository goes public:
-
-- Add a `LICENSE` file and a license section in the README.
-- Move or remove `docs/windows-steps.md` and `docs/superpowers/`.
-- Neutralise the "owner" wording in `docs/discovery.md`.
-- Decide which commit author e-mail should appear in the public history.
 - Verify `install.ps1` and the Scoop manifest on Windows; `install.ps1` has not been run on any system yet.
 - Run a real `brew install milczarekIT/tap/rainbow-statusline` from the tap once it exists.

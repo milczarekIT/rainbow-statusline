@@ -108,3 +108,7 @@ scoop uninstall rainbow-statusline           # Windows, Scoop
 ```
 
 If you used a script, delete the file it printed (`~/.local/bin/rainbow-statusline`, or the install folder on Windows, and its entry in your user PATH). Removing the package first leaves your assistants pointing at a program that no longer exists; run `uninstall` before removing it.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

@@ -34,7 +34,7 @@ Real settings were not written: `~/.claude/settings.json` and `~/.copilot/config
   - No cost in USD: `cost.total_premium_requests` and `ai_used` (nano AIU, `formatted` string) instead.
   - No effort, no cache expiry/TTL, no rate limits. Cache fields are only token counts (`total_cache_read_tokens`, `total_cache_write_tokens`).
   - `model.display_name` changes while running: `Copilot Fusion` before the first reply, `Copilot Fusion → mai-code-1.1-flash` after (auto routing); `model.id` stays `auto`.
-- Plugins in Copilot: `~/.copilot/installed-plugins/` only holds `orca.json` here. No Ponytail, Caveman, RTK or claude-mem data for Copilot was found on this Mac, so those fields have no source there (`—`, badges hidden). To re-check with the owner's Copilot account on Windows (stage 4 of `docs/windows-steps.md`).
+- Plugins in Copilot: `~/.copilot/installed-plugins/` only holds `orca.json` here. No Ponytail, Caveman, RTK or claude-mem data for Copilot was found on this Mac, so those fields have no source there (`—`, badges hidden). Not yet checked on Windows.
 
 ## OpenCode
 
@@ -43,7 +43,7 @@ Real settings were not written: `~/.claude/settings.json` and `~/.copilot/config
 - `tokens.total` on a message equals input + output + reasoning + cache read (100417 = 98623 + 2 + 0 + 1792). The session-level `tokens` has no `total`.
 - Database: `$XDG_DATA_HOME/opencode/opencode.db` (default `~/.local/share/opencode/opencode.db`). Table `session` columns: `id, project_id, workspace_id, parent_id, slug, directory, path, title, version, share_url, summary_*, metadata, cost, tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write, revert, permission, agent, model, time_created, time_updated, time_compacting, time_archived`.
 - Config: `$XDG_CONFIG_HOME/opencode/` (`opencode.json`, `tui.json`, `plugins/`). Plugin flag files `.caveman-active` and `.ponytail-active` live there.
-- A TUI plugin can run an executable on macOS: `scripts/probe/exec-probe.tsx` ran `echo` every 2 s (24-52 ms per run) and drew the result in the `app_bottom` slot. `opencode --pure` skips plugins, so it must not be used for this test. Windows: open (stage 3 of `docs/windows-steps.md`).
+- A TUI plugin can run an executable on macOS: `scripts/probe/exec-probe.tsx` ran `echo` every 2 s (24-52 ms per run) and drew the result in the `app_bottom` slot. `opencode --pure` skips plugins, so it must not be used for this test. Windows: not yet checked.
 
 ## Data locations of the integrations (macOS)
 
@@ -55,7 +55,7 @@ Real settings were not written: `~/.claude/settings.json` and `~/.copilot/config
 | Ponytail | Claude Code: plugin script `hooks/ponytail-statusline.sh` found via `~/.claude/plugins/installed_plugins.json`; OpenCode: `~/.config/opencode/.ponytail-active` (absent here, default `full`) | badge |
 | Claude Code plugin registry | `~/.claude/settings.json` (`enabledPlugins`), `~/.claude/plugins/installed_plugins.json` | which plugins are installed |
 
-Windows equivalents are guesses until `docs/windows-steps.md` stage 1 runs: RTK probably `%LOCALAPPDATA%\rtk\history.db` (the script also checks `%APPDATA%\rtk` and `~\.local\share\rtk`), claude-mem `%USERPROFILE%\.claude-mem`, OpenCode `%USERPROFILE%\.config\opencode` and `%USERPROFILE%\.local\share\opencode` (xdg-basedir style), Copilot `%USERPROFILE%\.copilot`.
+Windows equivalents are guesses until checked on Windows: RTK probably `%LOCALAPPDATA%\rtk\history.db` (the script also checks `%APPDATA%\rtk` and `~\.local\share\rtk`), claude-mem `%USERPROFILE%\.claude-mem`, OpenCode `%USERPROFILE%\.config\opencode` and `%USERPROFILE%\.local\share\opencode` (xdg-basedir style), Copilot `%USERPROFILE%\.copilot`.
 
 ## Status of the spec's open questions
 
@@ -63,8 +63,8 @@ Windows equivalents are guesses until `docs/windows-steps.md` stage 1 runs: RTK 
 |---|---|
 | Copilot: exact stdin JSON fields | Answered above (1.0.105, macOS). |
 | Copilot: still needs an experimental flag? | No in 1.0.105 on macOS; confirm on Windows. |
-| Copilot: plugin data and Ponytail/Caveman/RTK/claude-mem there | No source found on macOS; confirm with the owner's account. |
-| Windows: database and flag locations of the four plugins | Open, `windows-steps.md` stage 1. |
+| Copilot: plugin data and Ponytail/Caveman/RTK/claude-mem there | No source found on macOS; not yet checked on Windows. |
+| Windows: database and flag locations of the four plugins | Open. |
 | Windows: Claude Code and Copilot run the status line command (shell, quoting) | Open, stages 2 and 4. |
 | OpenCode plugin runs an executable on Windows without a flashing window | Open, stage 3. |
 | Blockers from "Co blokuje upublicznienie" | None so far: Claude Code and Copilot both draw a status line on macOS. Windows can still produce one. |
