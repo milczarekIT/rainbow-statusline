@@ -46,3 +46,17 @@ jobs:
       - run: |
           & "$env:LOCALAPPDATA\Programs\rainbow-statusline\rainbow-statusline.exe" --version
           if ([Environment]::GetEnvironmentVariable('Path', 'User') -notlike '*rainbow-statusline*') { throw 'install folder is not on the user PATH' }
+
+  # Installs the published package, so it checks the latest release, not this commit.
+  scoop:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - run: |
+          iex "& {$(irm get.scoop.sh)} -RunAsAdmin"
+          "$env:USERPROFILE\scoop\shims" >> $env:GITHUB_PATH
+      - run: scoop bucket add milczarekIT https://github.com/milczarekIT/scoop-bucket
+      - run: scoop install rainbow-statusline
+      - run: rainbow-statusline --version

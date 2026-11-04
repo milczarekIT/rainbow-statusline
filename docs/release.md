@@ -16,11 +16,7 @@ Homebrew gets a plain formula, `brew install milczarekIT/tap/rainbow-statusline`
 
 GoReleaser deprecates `brews` (and so `goreleaser check` exits non-zero with "DEPRECATED: brews"), but the version pinned in `release.yml` (v2.19.0) still renders a formula from it. The workflow does not run `goreleaser check`. When GoReleaser removes `brews` in a major version, either stay on v2.x or replace it with a formula generated in the workflow from a template kept in the repository.
 
-Both packages publish to repositories that do not exist yet: `milczarekIT/homebrew-tap` and `milczarekIT/scoop-bucket`. Until the repository variable `PUBLISH_PACKAGES` is `true`, the workflow's first step runs GoReleaser with `--skip=homebrew,scoop` and only the GitHub release is made. To enable them:
-
-1. Create the two repositories (each with a README or an initial commit).
-2. Create a token with `contents: write` on each, and store them as the repository secrets `HOMEBREW_TAP_TOKEN` and `SCOOP_BUCKET_TOKEN`.
-3. Set the repository variable `PUBLISH_PACKAGES` to `true`.
+Both packages publish to `milczarekIT/homebrew-tap` and `milczarekIT/scoop-bucket`, using the repository secrets `HOMEBREW_TAP_TOKEN` and `SCOOP_BUCKET_TOKEN`. While the repository variable `PUBLISH_PACKAGES` is not `true`, the workflow makes only the GitHub release.
 
 `skip_upload: auto` additionally keeps pre-release tags (for example `v1.0.0-rc.1`) out of both repositories.
 
@@ -35,9 +31,3 @@ git tag v0.1.0-rc.1 && git push origin v0.1.0-rc.1
 gh run watch --repo milczarekIT/rainbow-statusline
 gh release download v0.1.0-rc.1 --repo milczarekIT/rainbow-statusline --dir /tmp/rs-rc
 ```
-
-
-## Still open
-
-- Verify the Scoop manifest on Windows.
-- Run a real `brew install milczarekIT/tap/rainbow-statusline` from the tap once it exists.
