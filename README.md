@@ -39,7 +39,7 @@ The first time, a short guide lists the assistants it finds, lets you pick which
 
 ### Density
 
-Full shows three lines:
+Full shows up to three lines; the plugin row appears only when there are badges:
 
 ![Full density: path, plugin badges, then model, context, output tokens, cost and cache](docs/statusline.svg)
 
