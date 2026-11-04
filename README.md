@@ -10,15 +10,15 @@ It is a single program with no runtime dependencies (no jq, sqlite3, bash, perl 
 
 macOS, Linux and Windows are supported.
 
-The first release is not published yet. Until then only the `go install` line works (Go 1.27 or newer); the others start working with that release.
+The Homebrew and Scoop packages are not published yet.
 
 | System | Command |
 |---|---|
-| macOS, Homebrew | `brew install milczarekIT/tap/rainbow-statusline` |
+| macOS, Homebrew (not yet published) | `brew install milczarekIT/tap/rainbow-statusline` |
 | macOS or Linux, script | `curl -fsSL https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.sh \| sh` |
-| Windows, Scoop (not yet tested) | `scoop bucket add milczarekIT https://github.com/milczarekIT/scoop-bucket` then `scoop install rainbow-statusline` |
+| Windows, Scoop (not yet published) | `scoop bucket add milczarekIT https://github.com/milczarekIT/scoop-bucket` then `scoop install rainbow-statusline` |
 | Windows, script (not yet tested) | `irm https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.ps1 \| iex` |
-| Any, from source | `go install github.com/milczarekIT/rainbow-statusline/cmd/rainbow-statusline@latest` |
+| Any, from source (Go 1.27 or newer) | `go install github.com/milczarekIT/rainbow-statusline/cmd/rainbow-statusline@latest` |
 | Any | download the archive for your system from the GitHub Releases page and put `rainbow-statusline` on your PATH |
 
 The scripts check the download against `checksums.txt` before installing and refuse on a mismatch. The checksum protects against a corrupted or truncated download, not against a compromised release: the checksum file comes from the same place as the archive. They install for the current user only (`~/.local/bin` on macOS, `%LOCALAPPDATA%\Programs\rainbow-statusline` on Windows), never use sudo, and tell you what to do about PATH: on macOS they print the line to add to your shell profile, on Windows they add the folder to your user PATH and say so.
@@ -34,6 +34,24 @@ rainbow-statusline
 Use Windows Terminal on Windows; it is the supported terminal. Under Git Bash or mintty a bare run sees no terminal on stdin and waits there; press `Ctrl+C` to leave.
 
 The first time, a short guide lists the assistants it finds, lets you pick which items to show and how dense the line is, and shows a live preview. Nothing in your assistants' settings changes until you confirm, and every file is backed up first. If an assistant already has a different status line, the guide shows it and asks before replacing it. Afterwards the same command opens a single configuration screen with a list of items and a live preview; `s` saves.
+
+![The first-run guide: choosing assistants, items and density with a live preview, then installing](docs/first-run.gif)
+
+### Density
+
+Full shows up to three lines; the plugin row appears only when there are badges:
+
+![Full density: path, plugin badges, then model, context, output tokens, cost and cache](docs/statusline.svg)
+
+Compact drops the user and directory:
+
+![Compact density: plugin badges, then model, context, output tokens, cost and cache](docs/statusline-compact.svg)
+
+Minimal keeps one line with the model, context and cost:
+
+![Minimal density: model, context and cost on one line](docs/statusline-minimal.svg)
+
+The longer lines are wrapped here to fit the page.
 
 ## What works where
 

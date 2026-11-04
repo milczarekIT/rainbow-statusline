@@ -36,7 +36,6 @@ gh run watch --repo milczarekIT/rainbow-statusline
 gh release download v0.1.0-rc.1 --repo milczarekIT/rainbow-statusline --dir /tmp/rs-rc
 ```
 
-After the first release, check the `curl` and `irm` installers and remove the "first release is not published yet" notice from the README.
 
 ## Still open
 
