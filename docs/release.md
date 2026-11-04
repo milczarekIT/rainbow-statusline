@@ -39,5 +39,5 @@ gh release download v0.1.0-rc.1 --repo milczarekIT/rainbow-statusline --dir /tmp
 
 ## Still open
 
-- Verify `install.ps1` and the Scoop manifest on Windows; `install.ps1` has not been run on any system yet.
+- Verify the Scoop manifest on Windows.
 - Run a real `brew install milczarekIT/tap/rainbow-statusline` from the tap once it exists.

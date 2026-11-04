@@ -17,7 +17,7 @@ The Homebrew and Scoop packages are not published yet.
 | macOS, Homebrew (not yet published) | `brew install milczarekIT/tap/rainbow-statusline` |
 | macOS or Linux, script | `curl -fsSL https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.sh \| sh` |
 | Windows, Scoop (not yet published) | `scoop bucket add milczarekIT https://github.com/milczarekIT/scoop-bucket` then `scoop install rainbow-statusline` |
-| Windows, script (not yet tested) | `irm https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.ps1 \| iex` |
+| Windows, script | `irm https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.ps1 \| iex` |
 | Any, from source (Go 1.27 or newer) | `go install github.com/milczarekIT/rainbow-statusline/cmd/rainbow-statusline@latest` |
 | Any | download the archive for your system from the GitHub Releases page and put `rainbow-statusline` on your PATH |
 
