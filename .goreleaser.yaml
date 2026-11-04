@@ -32,9 +32,8 @@ release:
 
 # A plain formula, not a cask: a cask download is quarantined and an unsigned
 # binary would be blocked by Gatekeeper. goreleaser deprecates "brews" but still
-# supports it in the pinned version (docs/release.md). The tap and bucket
-# repositories do not exist yet: until they do, the release workflow does not run
-# the publish steps. skip_upload: auto also keeps pre-release tags out.
+# supports it in the pinned version (docs/release.md). skip_upload: auto keeps
+# pre-release tags out of the tap and the bucket.
 brews:
   - name: rainbow-statusline
     repository:
