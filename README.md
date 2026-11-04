@@ -12,21 +12,18 @@ It is a single program with no runtime dependencies (no jq, sqlite3, bash, perl 
 
 ## Install
 
-macOS and Windows are supported. Linux is not promised.
+macOS, Linux and Windows are supported.
+
+The first release is not published yet. Until then only the `go install` line works (Go 1.27 or newer); the others start working with that release.
 
 | System | Command |
 |---|---|
 | macOS, Homebrew | `brew install milczarekIT/tap/rainbow-statusline` |
-| macOS, script | `curl -fsSL https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.sh \| sh` |
+| macOS or Linux, script | `curl -fsSL https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.sh \| sh` |
 | Windows, Scoop (not yet tested) | `scoop bucket add milczarekIT https://github.com/milczarekIT/scoop-bucket` then `scoop install rainbow-statusline` |
 | Windows, script (not yet tested) | `irm https://raw.githubusercontent.com/milczarekIT/rainbow-statusline/main/install.ps1 \| iex` |
-| Either | download the archive for your system from the GitHub Releases page and put `rainbow-statusline` on your PATH |
-
-These commands download from GitHub without signing in, so they work only while the repository is public. For a private copy, sign in with the GitHub CLI and download the release yourself:
-
-```
-gh release download --repo milczarekIT/rainbow-statusline --pattern 'rainbow-statusline_*' --pattern checksums.txt
-```
+| Any, from source | `go install github.com/milczarekIT/rainbow-statusline/cmd/rainbow-statusline@latest` |
+| Any | download the archive for your system from the GitHub Releases page and put `rainbow-statusline` on your PATH |
 
 The scripts check the download against `checksums.txt` before installing and refuse on a mismatch. The checksum protects against a corrupted or truncated download, not against a compromised release: the checksum file comes from the same place as the archive. They install for the current user only (`~/.local/bin` on macOS, `%LOCALAPPDATA%\Programs\rainbow-statusline` on Windows), never use sudo, and tell you what to do about PATH: on macOS they print the line to add to your shell profile, on Windows they add the folder to your user PATH and say so.
 
@@ -56,7 +53,8 @@ The first time, a short guide lists the assistants it finds, lets you pick which
 | Ponytail, Caveman | yes | yes | never shown |
 | RTK, claude-mem session `c:` | yes | yes | — |
 | RTK, claude-mem total `t:` | yes | yes | from the machine-wide data, when installed |
-| Verified on macOS | bar compared with the old bar | bar compared with the old bar | through real samples of its input |
+| Verified on macOS | figures checked on real session data | figures checked on real session data | through real samples of its input |
+| Verified on Linux (Ubuntu 24.04) | through real samples of its input | through real samples of its input | through real samples of its input |
 | Verified on Windows | not yet | not yet | not yet |
 
 A dash (`—`) means the assistant does not provide the value or it could not be read. A value that is not a measurement carries a `~`. A percentage outside 0–100, a negative count, an unreadable value, more than a trillion tokens, more than a million USD, or a `t:` total smaller than its `c:` session figure is shown as `—`, never clamped. Windows support is built and unit-tested, but the real assistants have not yet been run there, so treat it as unverified until this table says otherwise.
@@ -75,7 +73,7 @@ A dash (`—`) means the assistant does not provide the value or it could not be
 | `[PONYTAIL]`, `[CAVEMAN]` | The plugin's own mode flag file. The badge is hidden when the plugin is missing or off. |
 | RTK `c:` | Tokens saved and percentage for this session: rows of RTK's `history.db` matched to the session through RTK's hook decisions (Claude Code) or the session's bash commands (OpenCode). |
 | RTK `t:` | All-time saved and input tokens from `rtk gain -f json`, and their ratio. |
-| claude-mem `c:` | The `work | saved` line claude-mem injected into this session: read from the transcript (Claude Code) or from the local worker at `127.0.0.1:37777` (OpenCode). |
+| claude-mem `c:` | The `work \| saved` line claude-mem injected into this session: read from the transcript (Claude Code) or from the local worker at `127.0.0.1:37777` (OpenCode). |
 | claude-mem `t:` | claude-mem's own formula over its database: saved = sum of `discovery_tokens` minus the tokens needed to read the observations (about one token per four characters); work = sum of `discovery_tokens`; the percentage is saved over work. It is a potential, not a measurement, and is shown without `~`. |
 | Caveman `c:` / `t:` | Only in `full` mode: output tokens × 0.65 / 0.35 for the session and for all sessions. This is an estimate from Caveman's benchmark ratio, so both numbers carry `~`. |
 
@@ -95,10 +93,10 @@ rainbow-statusline uninstall
 
 It removes only the entries it added to your assistants' settings and restores the status line you had before. It leaves the program's own files, so running `rainbow-statusline` again opens the configuration screen, and `s` installs it again:
 
-| | macOS | Windows |
-|---|---|---|
-| Configuration, install state and backups (`state/`, `state/backups/`) | `~/Library/Application Support/rainbow-statusline` | `%APPDATA%\rainbow-statusline` |
-| Cache | `~/Library/Caches/rainbow-statusline` | `%LOCALAPPDATA%\rainbow-statusline` |
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| Configuration, install state and backups (`state/`, `state/backups/`) | `~/Library/Application Support/rainbow-statusline` | `~/.config/rainbow-statusline` | `%APPDATA%\rainbow-statusline` |
+| Cache | `~/Library/Caches/rainbow-statusline` | `~/.cache/rainbow-statusline` | `%LOCALAPPDATA%\rainbow-statusline` |
 
 Delete those folders to remove everything. Then remove the package:
 

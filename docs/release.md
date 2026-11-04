@@ -26,9 +26,9 @@ Both packages publish to repositories that do not exist yet: `milczarekIT/homebr
 
 The workflow pins its actions by commit SHA and GoReleaser by exact version; update them deliberately.
 
-## Pre-release while the repository is private
+## Pre-release
 
-For the maintainer to run later; nothing here has been run:
+Nothing here has been run yet:
 
 ```
 git tag v0.1.0-rc.1 && git push origin v0.1.0-rc.1
@@ -36,7 +36,7 @@ gh run watch --repo milczarekIT/rainbow-statusline
 gh release download v0.1.0-rc.1 --repo milczarekIT/rainbow-statusline --dir /tmp/rs-rc
 ```
 
-The anonymous paths (`curl`, `irm`, `brew`, `scoop`) can only be verified once the repository is public.
+After the first release, check the `curl` and `irm` installers and remove the "first release is not published yet" notice from the README.
 
 ## Still open
 

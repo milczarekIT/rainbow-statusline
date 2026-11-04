@@ -34,7 +34,7 @@ Real settings were not written: `~/.claude/settings.json` and `~/.copilot/config
   - No cost in USD: `cost.total_premium_requests` and `ai_used` (nano AIU, `formatted` string) instead.
   - No effort, no cache expiry/TTL, no rate limits. Cache fields are only token counts (`total_cache_read_tokens`, `total_cache_write_tokens`).
   - `model.display_name` changes while running: `Copilot Fusion` before the first reply, `Copilot Fusion → mai-code-1.1-flash` after (auto routing); `model.id` stays `auto`.
-- Plugins in Copilot: `~/.copilot/installed-plugins/` only holds `orca.json` here. No Ponytail, Caveman, RTK or claude-mem data for Copilot was found on this Mac, so those fields have no source there (`—`, badges hidden). Not yet checked on Windows.
+- Plugins in Copilot: `~/.copilot/installed-plugins/` held no data for these plugins on the test machine. No Ponytail, Caveman, RTK or claude-mem data for Copilot was found, so those fields have no source there (`—`, badges hidden). Not yet checked on Windows.
 
 ## OpenCode
 
@@ -57,7 +57,7 @@ Real settings were not written: `~/.claude/settings.json` and `~/.copilot/config
 
 Windows equivalents are guesses until checked on Windows: RTK probably `%LOCALAPPDATA%\rtk\history.db` (the script also checks `%APPDATA%\rtk` and `~\.local\share\rtk`), claude-mem `%USERPROFILE%\.claude-mem`, OpenCode `%USERPROFILE%\.config\opencode` and `%USERPROFILE%\.local\share\opencode` (xdg-basedir style), Copilot `%USERPROFILE%\.copilot`.
 
-## Status of the spec's open questions
+## Open questions
 
 | Question | Status |
 |---|---|
@@ -65,6 +65,5 @@ Windows equivalents are guesses until checked on Windows: RTK probably `%LOCALAP
 | Copilot: still needs an experimental flag? | No in 1.0.105 on macOS; confirm on Windows. |
 | Copilot: plugin data and Ponytail/Caveman/RTK/claude-mem there | No source found on macOS; not yet checked on Windows. |
 | Windows: database and flag locations of the four plugins | Open. |
-| Windows: Claude Code and Copilot run the status line command (shell, quoting) | Open, stages 2 and 4. |
-| OpenCode plugin runs an executable on Windows without a flashing window | Open, stage 3. |
-| Blockers from "Co blokuje upublicznienie" | None so far: Claude Code and Copilot both draw a status line on macOS. Windows can still produce one. |
+| Windows: Claude Code and Copilot run the status line command (shell, quoting) | Open. |
+| OpenCode plugin runs an executable on Windows without a flashing window | Open. |
