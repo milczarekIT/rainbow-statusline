@@ -117,3 +117,12 @@ func TestCopilotHidesPonytailAndCaveman(t *testing.T) {
 		t.Fatal("claude keeps all four")
 	}
 }
+
+func TestBadgeStatsTakeTheBadgeColour(t *testing.T) {
+	b := badge("RTK", "38;5;141", "1.1k", "38.3M")
+	for _, s := range b.Lines {
+		if s.FG != "38;5;141" {
+			t.Errorf("segment %q has colour %q, want the badge's 38;5;141", s.Text, s.FG)
+		}
+	}
+}

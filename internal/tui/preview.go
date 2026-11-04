@@ -30,7 +30,7 @@ func DemoSession() model.Session {
 func pair(name, colour, c, t string) render.Badge {
 	return render.Badge{Name: name, Lines: []render.Segment{
 		{Text: "[" + name + "]", FG: colour},
-		{Text: " (c: " + c + " | t: " + t + ")"},
+		{Text: " (c: " + c + " | t: " + t + ")", FG: colour},
 	}}
 }
 

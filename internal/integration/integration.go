@@ -218,7 +218,7 @@ func totalOrDash(c, t string, session, total int64) string {
 func badge(name, colour string, c, t string) render.Badge {
 	return render.Badge{Name: name, Lines: []render.Segment{
 		{Text: "[" + name + "]", FG: colour},
-		{Text: " (c: " + c + " | t: " + t + ")"},
+		{Text: " (c: " + c + " | t: " + t + ")", FG: colour},
 	}}
 }
 

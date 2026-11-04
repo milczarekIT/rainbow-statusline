@@ -467,3 +467,13 @@ func TestBarSettingsSaveWithNoAssistant(t *testing.T) {
 		t.Errorf("bar settings should save: %v %v (%q)", found, cfg.Hidden, m.footer)
 	}
 }
+
+func TestDemoBadgeStatsTakeTheBadgeColour(t *testing.T) {
+	for _, b := range demoBadges() {
+		for _, s := range b.Lines {
+			if s.FG != b.Lines[0].FG {
+				t.Errorf("%s: segment %q has colour %q, want %q", b.Name, s.Text, s.FG, b.Lines[0].FG)
+			}
+		}
+	}
+}

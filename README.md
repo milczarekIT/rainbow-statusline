@@ -2,11 +2,7 @@
 
 One status line for AI coding assistants. It shows where you are, which plugins are active, the model, how full the context is, what the session costs and how long the prompt cache lives, in the same layout in Claude Code, Copilot CLI and OpenCode.
 
-```
-user@host:project
-[PONYTAIL] [CAVEMAN] (c: ~156.1k | t: ~185.8M) [RTK] (c: 1.1k · 28.5% | t: 38.3M · 55.0%) [CLAUDE-MEM] (c: 403.2k · 87% | t: 67.5M · 92%)
-Opus 5.5 (medium) │ ctx ▰▰▰▱▱▱▱▱ 118.1k / 200.0k (59.0%) · Σout 84.1k │ session ~$8.67 ‖ ⚡ read 8.2k · write 0 · ⏱ 2:32 1h
-```
+![Rainbow Statusline showing the path, plugin badges, model, context bar, session cost and cache timer in colour](docs/statusline.svg)
 
 It is a single program with no runtime dependencies (no jq, sqlite3, bash, perl or Node). It sends nothing anywhere: the only network call is to the local claude-mem worker on `127.0.0.1`.
 
