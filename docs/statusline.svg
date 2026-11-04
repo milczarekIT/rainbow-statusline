@@ -5,11 +5,11 @@
 <text x="100.0" y="32" fill="#2472c8" textLength="58.8">project</text>
 <text x="16.0" y="54" fill="#87af87" textLength="84.0">[PONYTAIL]</text>
 <text x="108.4" y="54" fill="#d78700" textLength="75.6">[CAVEMAN]</text>
-<text x="192.4" y="54" fill="#d4d4d4" textLength="210.0">(c: ~156.1k | t: ~185.8M)</text>
+<text x="192.4" y="54" fill="#d78700" textLength="210.0">(c: ~156.1k | t: ~185.8M)</text>
 <text x="410.8" y="54" fill="#af87ff" textLength="42.0">[RTK]</text>
-<text x="461.2" y="54" fill="#d4d4d4" textLength="302.4">(c: 1.1k · 28.5% | t: 38.3M · 55.0%)</text>
+<text x="461.2" y="54" fill="#af87ff" textLength="302.4">(c: 1.1k · 28.5% | t: 38.3M · 55.0%)</text>
 <text x="16.0" y="76" fill="#5fafff" textLength="100.8">[CLAUDE-MEM]</text>
-<text x="125.2" y="76" fill="#d4d4d4" textLength="285.6">(c: 403.2k · 87% | t: 67.5M · 92%)</text>
+<text x="125.2" y="76" fill="#5fafff" textLength="285.6">(c: 403.2k · 87% | t: 67.5M · 92%)</text>
 <text x="16.0" y="98" fill="#ff8700" textLength="67.2" font-weight="bold">Opus 5.5</text>
 <text x="91.6" y="98" fill="#d4d4d4" textLength="8.4" opacity="0.6">(</text>
 <text x="100.0" y="98" fill="#87d787" textLength="50.4">medium</text>
