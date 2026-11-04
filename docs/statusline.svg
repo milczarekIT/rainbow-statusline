@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="864" height="142" viewBox="0 0 864 142" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'DejaVu Sans Mono',monospace" font-size="14">
+<rect width="100%" height="100%" rx="8" fill="#0d1117"/>
+<text x="16.0" y="32" fill="#0dbc79" textLength="75.6">user@host</text>
+<text x="91.6" y="32" fill="#d4d4d4" textLength="8.4">:</text>
+<text x="100.0" y="32" fill="#2472c8" textLength="58.8">project</text>
+<text x="16.0" y="54" fill="#87af87" textLength="84.0">[PONYTAIL]</text>
+<text x="108.4" y="54" fill="#d78700" textLength="75.6">[CAVEMAN]</text>
+<text x="192.4" y="54" fill="#d4d4d4" textLength="210.0">(c: ~156.1k | t: ~185.8M)</text>
+<text x="410.8" y="54" fill="#af87ff" textLength="42.0">[RTK]</text>
+<text x="461.2" y="54" fill="#d4d4d4" textLength="302.4">(c: 1.1k · 28.5% | t: 38.3M · 55.0%)</text>
+<text x="16.0" y="76" fill="#5fafff" textLength="100.8">[CLAUDE-MEM]</text>
+<text x="125.2" y="76" fill="#d4d4d4" textLength="285.6">(c: 403.2k · 87% | t: 67.5M · 92%)</text>
+<text x="16.0" y="98" fill="#ff8700" textLength="67.2" font-weight="bold">Opus 5.5</text>
+<text x="91.6" y="98" fill="#d4d4d4" textLength="8.4" opacity="0.6">(</text>
+<text x="100.0" y="98" fill="#87d787" textLength="50.4">medium</text>
+<text x="150.4" y="98" fill="#d4d4d4" textLength="8.4" opacity="0.6">)</text>
+<text x="167.2" y="98" fill="#d4d4d4" textLength="8.4" opacity="0.6">│</text>
+<text x="184.0" y="98" fill="#d4d4d4" textLength="25.2" opacity="0.6">ctx</text>
+<text x="217.6" y="98" fill="#e5e510" textLength="67.2">▰▰▰▰▰▱▱▱</text>
+<text x="293.2" y="98" fill="#e5e510" textLength="50.4" font-weight="bold">118.1k</text>
+<text x="352.0" y="98" fill="#d4d4d4" textLength="50.4" opacity="0.6">/ 200k</text>
+<text x="410.8" y="98" fill="#e5e510" textLength="58.8">(59.0%)</text>
+<text x="478.0" y="98" fill="#d4d4d4" textLength="8.4" opacity="0.6">·</text>
+<text x="494.8" y="98" fill="#d4d4d4" textLength="33.6" opacity="0.6">Σout</text>
+<text x="536.8" y="98" fill="#87d787" textLength="42.0" font-weight="bold">84.1k</text>
+<text x="587.2" y="98" fill="#d4d4d4" textLength="8.4" opacity="0.6">│</text>
+<text x="604.0" y="98" fill="#d4d4d4" textLength="75.6" opacity="0.6">session ~</text>
+<text x="679.6" y="98" fill="#ffd700" textLength="42.0">$8.67</text>
+<text x="730.0" y="98" fill="#585858" textLength="8.4">‖</text>
+<text x="746.8" y="98" fill="#00afff" textLength="16.8">⚡</text>
+<text x="772.0" y="98" fill="#d4d4d4" textLength="33.6" opacity="0.6">read</text>
+<text x="814.0" y="98" fill="#00d7ff" textLength="33.6">8.2k</text>
+<text x="16.0" y="120" fill="#d4d4d4" textLength="8.4" opacity="0.6">·</text>
+<text x="32.8" y="120" fill="#d4d4d4" textLength="42.0" opacity="0.6">write</text>
+<text x="83.2" y="120" fill="#ff87ff" textLength="8.4">0</text>
+<text x="100.0" y="120" fill="#d4d4d4" textLength="8.4" opacity="0.6">·</text>
+<text x="116.8" y="120" fill="#e5e510" textLength="50.4">⏱ 2:32</text>
+<text x="175.6" y="120" fill="#d4d4d4" textLength="16.8" opacity="0.6">1h</text>
+</svg>
