@@ -28,6 +28,6 @@ A tag such as `v1.2.3-rc.1` runs the same workflow as a real release, but it doe
 
 ```
 git tag v1.2.3-rc.1 && git push origin v1.2.3-rc.1
-gh run watch --repo milczarekIT/rainbow-statusline
-RAINBOW_STATUSLINE_VERSION=v1.2.3-rc.1 RAINBOW_STATUSLINE_DIR=$(mktemp -d) sh install.sh
+gh run watch --repo milczarekIT/rainbow-statusline --exit-status &&
+  RAINBOW_STATUSLINE_VERSION=v1.2.3-rc.1 RAINBOW_STATUSLINE_DIR=$(mktemp -d) sh install.sh
 ```
