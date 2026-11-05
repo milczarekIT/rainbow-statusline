@@ -15,8 +15,8 @@ import (
 const guideMinHeight = 22
 
 var densities = []struct{ id, name, note string }{
-	{"full", "Full", "three lines"},
-	{"compact", "Compact", "two lines, no user or directory"},
+	{"full", "Full", "up to three lines"},
+	{"compact", "Compact", "up to two lines, no user or directory"},
 	{"minimal", "Minimal", "one line: model, context, cost"},
 }
 
