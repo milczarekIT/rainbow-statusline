@@ -24,10 +24,10 @@ The workflow pins its actions by commit SHA and GoReleaser by exact version; upd
 
 ## Pre-release
 
-Nothing here has been run yet:
+A tag such as `v1.2.3-rc.1` runs the same workflow as a real release, but it does not become the latest release and stays out of Homebrew and Scoop:
 
 ```
-git tag v0.1.0-rc.1 && git push origin v0.1.0-rc.1
+git tag v1.2.3-rc.1 && git push origin v1.2.3-rc.1
 gh run watch --repo milczarekIT/rainbow-statusline
-gh release download v0.1.0-rc.1 --repo milczarekIT/rainbow-statusline --dir /tmp/rs-rc
+RAINBOW_STATUSLINE_VERSION=v1.2.3-rc.1 RAINBOW_STATUSLINE_DIR=$(mktemp -d) sh install.sh
 ```

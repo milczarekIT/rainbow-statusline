@@ -19,7 +19,7 @@ macOS, Linux and Windows are supported.
 | Any, from source (Go 1.27 or newer) | `go install github.com/milczarekIT/rainbow-statusline/cmd/rainbow-statusline@latest` |
 | Any | download the archive for your system from the GitHub Releases page and put `rainbow-statusline` on your PATH |
 
-The scripts check the download against `checksums.txt` before installing and refuse on a mismatch. The checksum protects against a corrupted or truncated download, not against a compromised release: the checksum file comes from the same place as the archive. They install for the current user only (`~/.local/bin` on macOS, `%LOCALAPPDATA%\Programs\rainbow-statusline` on Windows), never use sudo, and tell you what to do about PATH: on macOS they print the line to add to your shell profile, on Windows they add the folder to your user PATH and say so.
+The scripts check the download against `checksums.txt` before installing and refuse on a mismatch. The checksum protects against a corrupted or truncated download, not against a compromised release: the checksum file comes from the same place as the archive. They install for the current user only (`~/.local/bin` on macOS and Linux, `%LOCALAPPDATA%\Programs\rainbow-statusline` on Windows), never use sudo, and tell you what to do about PATH: on macOS and Linux they print the line to add to your shell profile, on Windows they add the folder to your user PATH and say so.
 
 ## First run
 
