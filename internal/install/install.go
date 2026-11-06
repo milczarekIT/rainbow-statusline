@@ -29,6 +29,7 @@ import (
 type Change struct {
 	Agent, Path, Summary string
 	Replaces             string // a status line we did not write and would replace
+	Changed              bool   // false when the file already holds what an install would write
 }
 
 // Report receives what Uninstall did, one line per file.
@@ -96,6 +97,7 @@ func Plan(ids []string) ([]Change, error) {
 			return nil, err
 		}
 		for _, a := range actions {
+			a.Changed = a.writes()
 			out = append(out, a.Change)
 		}
 	}
@@ -310,11 +312,16 @@ func removeDirs(dirs []string) {
 // Install saves the state before the files and uninstall after them, so a kill
 // at any point leaves records a rerun of uninstall can finish from: a record
 // whose entry is not in the file is reported and dropped.
+// writes says whether the action would change anything on disk.
+func (a action) writes() bool {
+	return a.remove || (a.write && !(a.cur.exists && bytes.Equal(a.cur.bytes, a.next)))
+}
+
 func commit(actions []action, st *state, stateLast bool) error {
 	var writes []action
 	for _, a := range actions {
 		a.record(st)
-		if a.remove || (a.write && !(a.cur.exists && bytes.Equal(a.cur.bytes, a.next))) {
+		if a.writes() {
 			writes = append(writes, a)
 		}
 	}
