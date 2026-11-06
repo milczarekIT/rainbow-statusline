@@ -75,11 +75,18 @@ main() {
 	mv -f "$dir/$name.new" "$dir/$name"
 
 	printf 'Installed %s\n' "$dir/$name"
-	case ":$PATH:" in
-	*":$dir:"*) ;;
+	case "$dir" in
+	*:*)
+		printf '\n%s cannot go on your PATH: the colon in its name would split it into two entries. Use the full path below, or install into another folder.\n' "$dir"
+		;;
 	*)
-		# shellcheck disable=SC2016 # the $PATH in the printed line must stay literal
-		printf '\n%s is not on your PATH. Add this line to your shell profile (~/.zshrc for zsh, ~/.bashrc for bash):\n  export PATH="%s:$PATH"\n' "$dir" "$dir"
+		case ":$PATH:" in
+		*":$dir:"*) ;;
+		*)
+			# shellcheck disable=SC2016 # the $PATH in the printed line must stay literal
+			printf '\n%s is not on your PATH. Add this line to your shell profile (~/.zshrc for zsh, ~/.bashrc for bash):\n  export PATH="%s:$PATH"\n' "$dir" "$dir"
+			;;
+		esac
 		;;
 	esac
 	next="$dir/$name"
