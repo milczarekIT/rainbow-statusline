@@ -35,6 +35,27 @@ The first time, a short guide lists the assistants it finds, lets you pick which
 
 ![The first-run guide: choosing assistants, items and density with a live preview, then installing](docs/first-run.gif)
 
+### Setup from a script
+
+For Ansible, dotfiles or a provisioning script, skip the guide:
+
+```
+rainbow-statusline install
+```
+
+It needs no terminal and asks nothing. It sets up every assistant it finds, with the default view. Use `--agent claude,copilot` to name them: an assistant named there but not found is an error, while without the flag one that is installed later is simply missed, so order your provisioning accordingly.
+
+It stops with a non-zero exit code when it could not finish, and changes nothing if an assistant already has a status line it did not write. Add `--replace` to replace that line; the file is backed up first and `rainbow-statusline uninstall` brings it back.
+
+Running it again is safe. It keeps your view and the assistants you chose, and prints `Nothing to change.` when every file is already in place, which suits Ansible's `changed_when`:
+
+```yaml
+- name: Set up Rainbow Statusline
+  ansible.builtin.command: rainbow-statusline install --agent claude
+  register: statusline
+  changed_when: "'Nothing to change' not in statusline.stdout"
+```
+
 ### Density
 
 Full shows up to three lines; the plugin row appears only when there are badges:

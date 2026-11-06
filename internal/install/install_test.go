@@ -1079,3 +1079,24 @@ func TestInstallPs1KeepsUserPathRaw(t *testing.T) {
 		t.Error("install.ps1 reads PATH expanded, which flattens %VAR% entries")
 	}
 }
+
+func TestPlanSaysWhetherAFileWouldChange(t *testing.T) {
+	home := sandbox(t)
+	put(t, filepath.Join(home, ".claude", "settings.json"), `{}`)
+	c, err := Plan([]string{"claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c[0].Changed {
+		t.Error("a new status line is a change")
+	}
+	if err := Apply(c); err != nil {
+		t.Fatal(err)
+	}
+	if c, err = Plan([]string{"claude"}); err != nil {
+		t.Fatal(err)
+	}
+	if c[0].Changed {
+		t.Errorf("already installed, but Changed: %+v", c[0])
+	}
+}

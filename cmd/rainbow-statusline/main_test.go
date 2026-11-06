@@ -222,7 +222,7 @@ func TestVersionAndHelpPrint(t *testing.T) {
 		t.Errorf("--version: %q", got)
 	}
 	for _, arg := range []string{"--help", "-h"} {
-		if got := string(runBinary(t, "", arg)); !strings.Contains(got, "Usage:") || !strings.Contains(got, "uninstall") {
+		if got := string(runBinary(t, "", arg)); !strings.Contains(got, "Usage:") || !strings.Contains(got, "uninstall") || !strings.Contains(got, "--replace") {
 			t.Errorf("%s: %q", arg, got)
 		}
 	}
@@ -264,5 +264,224 @@ func TestBadArguments(t *testing.T) {
 		if got := badArguments(c.stdinTTY, c.stdoutTTY, c.err, c.extra); got != c.want {
 			t.Errorf("%+v: got %v", c, got)
 		}
+	}
+}
+
+// installHome gives runInstall an empty home where Claude Code is detected.
+func installHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	for _, k := range []string{"XDG_CONFIG_HOME", "CLAUDE_CONFIG_DIR", "PATH"} {
+		t.Setenv(k, "")
+	}
+	t.Setenv("COPILOT_HOME", filepath.Join(home, "no-copilot"))
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	old := config.ConfigDir
+	config.ConfigDir = func() (string, error) { return filepath.Join(home, "cfg"), nil }
+	t.Cleanup(func() { config.ConfigDir = old })
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return home
+}
+
+func detectCopilot(t *testing.T, home string) string {
+	t.Helper()
+	dir := filepath.Join(home, ".copilot")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("COPILOT_HOME", dir)
+	return filepath.Join(dir, "settings.json")
+}
+
+func runInstallOK(t *testing.T, args ...string) string {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	if code := runInstall(args, &out, &errOut); code != 0 || errOut.Len() != 0 {
+		t.Fatalf("code %d, stderr %q", code, errOut.String())
+	}
+	return out.String()
+}
+
+func read(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestInstallSetsUpDetectedAssistantWithDefaults(t *testing.T) {
+	home := installHome(t)
+	out := runInstallOK(t)
+	settings := filepath.Join(home, ".claude", "settings.json")
+	if !strings.Contains(read(t, settings), "--agent claude") {
+		t.Errorf("settings: %s", read(t, settings))
+	}
+	if !strings.Contains(out, settings) {
+		t.Errorf("stdout = %q", out)
+	}
+	cfg, found := config.Load()
+	if !found || cfg.Density != "full" || strings.Join(cfg.Agents, ",") != "claude" {
+		t.Errorf("config %+v, found %v", cfg, found)
+	}
+}
+
+func TestInstallFailures(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		code int
+		want string
+	}{
+		{"unknown assistant", []string{"--agent", "nope"}, 1, "nope"},
+		{"assistant not detected", []string{"--agent", "copilot"}, 1, "not detected"},
+		{"unknown flag", []string{"--nope"}, 2, "Usage:"},
+		{"stray argument", []string{"claude"}, 2, "Usage:"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			installHome(t)
+			var out, errOut bytes.Buffer
+			if code := runInstall(c.args, &out, &errOut); code != c.code || !strings.Contains(errOut.String(), c.want) {
+				t.Errorf("code %d, stderr %q", code, errOut.String())
+			}
+			if _, found := config.Load(); found {
+				t.Error("a failed install saved a configuration")
+			}
+		})
+	}
+}
+
+func TestInstallFailsWhenNoAssistantIsDetected(t *testing.T) {
+	home := installHome(t)
+	if err := os.Remove(filepath.Join(home, ".claude")); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if code := runInstall(nil, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "no assistant") {
+		t.Errorf("code %d, stderr %q", code, errOut.String())
+	}
+}
+
+func TestInstallRefusesForeignStatusLineWithoutReplace(t *testing.T) {
+	home := installHome(t)
+	settings := filepath.Join(home, ".claude", "settings.json")
+	orig := `{"statusLine":{"type":"command","command":"my-line"}}`
+	if err := os.WriteFile(settings, []byte(orig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if code := runInstall(nil, &out, &errOut); code != 1 {
+		t.Fatalf("code %d", code)
+	}
+	for _, want := range []string{settings, "my-line", "--replace"} {
+		if !strings.Contains(errOut.String(), want) {
+			t.Errorf("stderr %q lacks %q", errOut.String(), want)
+		}
+	}
+	if got := read(t, settings); got != orig {
+		t.Errorf("settings changed: %s", got)
+	}
+	if _, found := config.Load(); found {
+		t.Error("a refused install saved a configuration")
+	}
+
+	runInstallOK(t, "--replace")
+	if got := read(t, settings); strings.Contains(got, "my-line") || !strings.Contains(got, "--agent claude") {
+		t.Errorf("settings after --replace: %s", got)
+	}
+}
+
+func TestInstallSanitizesTheLineItRefuses(t *testing.T) {
+	home := installHome(t)
+	settings := filepath.Join(home, ".claude", "settings.json")
+	if err := os.WriteFile(settings, []byte(`{"statusLine":{"command":"a\u001b[31mb"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if code := runInstall(nil, &out, &errOut); code != 1 || strings.Contains(errOut.String(), "\x1b") {
+		t.Errorf("code %d, stderr %q", code, errOut.String())
+	}
+}
+
+func TestInstallAgainReportsNothingAndKeepsTheView(t *testing.T) {
+	installHome(t)
+	if out := runInstallOK(t); strings.Contains(out, "Nothing to change") {
+		t.Errorf("first run: %q", out)
+	}
+	cfg, _ := config.Load()
+	cfg.Density = "compact"
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if out := runInstallOK(t); out != "Nothing to change.\n" {
+		t.Errorf("second run: %q", out)
+	}
+	if cfg, _ := config.Load(); cfg.Density != "compact" {
+		t.Errorf("density = %q", cfg.Density)
+	}
+}
+
+func TestInstallAgainKeepsAnAssistantTheUserLeftOut(t *testing.T) {
+	home := installHome(t)
+	copilot := detectCopilot(t, home)
+	if err := config.Save(config.Config{Agents: []string{"claude"}}); err != nil {
+		t.Fatal(err)
+	}
+	runInstallOK(t)
+	if _, err := os.Stat(copilot); !os.IsNotExist(err) {
+		t.Errorf("copilot was installed: %v", err)
+	}
+}
+
+func TestInstallAgentFlagAddsToTheChosenAssistants(t *testing.T) {
+	home := installHome(t)
+	copilot := detectCopilot(t, home)
+	runInstallOK(t, "--agent", "claude,claude")
+	if _, err := os.Stat(copilot); !os.IsNotExist(err) {
+		t.Errorf("copilot was installed: %v", err)
+	}
+	if cfg, _ := config.Load(); strings.Join(cfg.Agents, ",") != "claude" {
+		t.Errorf("agents = %v", cfg.Agents)
+	}
+	runInstallOK(t, "--agent", "copilot")
+	if !strings.Contains(read(t, copilot), "--agent copilot") {
+		t.Errorf("copilot settings: %s", read(t, copilot))
+	}
+	if cfg, _ := config.Load(); strings.Join(cfg.Agents, ",") != "claude,copilot" {
+		t.Errorf("agents = %v", cfg.Agents)
+	}
+}
+
+func TestRunInstallTurnsPanicIntoExitOne(t *testing.T) {
+	installHome(t)
+	var errOut bytes.Buffer
+	if code := runInstall(nil, panicWriter{}, &errOut); code != 1 || !strings.Contains(errOut.String(), "boom") {
+		t.Errorf("code %d, stderr %q", code, errOut.String())
+	}
+}
+
+// Automation has no terminal: the command must work with no stdin at all.
+func TestInstallSubcommandRunsWithoutATerminal(t *testing.T) {
+	bin := binPath(t)
+	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
+		t.Fatalf("build: %v\n%s", err, out)
+	}
+	home := t.TempDir()
+	settings := filepath.Join(home, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "install")
+	cmd.Env = []string{"HOME=" + home, "USERPROFILE=" + home, "APPDATA=" + home + "/appdata", "XDG_CONFIG_HOME=" + home + "/cfg", "PATH="}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if !strings.Contains(read(t, settings), "--agent claude") {
+		t.Errorf("settings: %s", read(t, settings))
 	}
 }

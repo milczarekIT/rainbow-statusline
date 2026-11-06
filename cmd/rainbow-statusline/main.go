@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/user"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,10 @@ const usage = `Rainbow Statusline: one status line for AI coding assistants.
 
 Usage:
   rainbow-statusline              open the first-run guide, later the configuration screen
+  rainbow-statusline install      set it up with no questions, for scripts: the
+                                  detected assistants and the default view
+      --agent a,b                 only these assistants: claude, copilot, opencode
+      --replace                   replace a status line it did not write
   rainbow-statusline uninstall    remove it from your assistants' settings
   rainbow-statusline --version    print the version
   rainbow-statusline --help       print this help
@@ -48,6 +53,10 @@ func main() {
 			fmt.Print(usage)
 			return
 		}
+	}
+
+	if len(os.Args) >= 2 && os.Args[1] == "install" {
+		os.Exit(runInstall(os.Args[2:], os.Stdout, os.Stderr))
 	}
 
 	if len(os.Args) == 2 && os.Args[1] == "uninstall" {
@@ -151,6 +160,94 @@ func runUninstall(out, errOut io.Writer) (code int) {
 		return 1
 	}
 	return 0
+}
+
+// runInstall is the first-run guide without the screen. Scripts rely on its exit
+// code: anything short of a full setup is a failure, and a status line it did
+// not write stays unless --replace says otherwise.
+func runInstall(args []string, out, errOut io.Writer) (code int) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintln(errOut, "install failed:", r)
+			code = 1
+		}
+	}()
+	flags := flag.NewFlagSet("install", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	agents := flags.String("agent", "", "")
+	replace := flags.Bool("replace", false, "")
+	if err := flags.Parse(args); err != nil || flags.NArg() > 0 {
+		fmt.Fprint(errOut, usage)
+		return 2
+	}
+
+	cfg, _ := config.Load()
+	ids := installTargets(*agents, cfg.Agents, install.Detect())
+	if len(ids) == 0 {
+		fmt.Fprintln(errOut, "install failed: no assistant to set up: none was detected or chosen")
+		return 1
+	}
+	changes, err := install.Plan(ids)
+	if err != nil {
+		fmt.Fprintln(errOut, "install failed:", err)
+		return 1
+	}
+	if !*replace {
+		for _, c := range changes {
+			if c.Replaces != "" {
+				fmt.Fprintf(errOut, "install failed: %s already has a status line (%s). Nothing was changed; use --replace to replace it.\n", c.Path, render.Sanitize(c.Replaces))
+				code = 1
+			}
+		}
+		if code != 0 {
+			return code
+		}
+	}
+	if err := install.Apply(changes); err != nil {
+		fmt.Fprintln(errOut, "install failed:", err)
+		return 1
+	}
+	for _, id := range ids {
+		if !slices.Contains(cfg.Agents, id) {
+			cfg.Agents = append(cfg.Agents, id)
+		}
+	}
+	if err := config.Save(cfg); err != nil {
+		fmt.Fprintln(errOut, "install failed: the assistants are set up, but the settings were not saved:", err)
+		return 1
+	}
+
+	changed := false
+	for _, c := range changes {
+		if c.Changed {
+			fmt.Fprintf(out, "%s: %s\n", c.Path, c.Summary)
+			changed = true
+		}
+	}
+	if changed {
+		fmt.Fprintln(out, "Restart your assistants to see the status line.")
+	} else {
+		fmt.Fprintln(out, "Nothing to change.")
+	}
+	return 0
+}
+
+// installTargets takes the assistants named on the command line. Without any it
+// keeps the user's last choice, so a repeated run does not bring back an
+// assistant they left out, and on a first run takes every detected one.
+func installTargets(named string, chosen []string, agents []install.Agent) []string {
+	if named != "" {
+		ids := strings.Split(named, ",")
+		slices.Sort(ids)
+		return slices.Compact(ids)
+	}
+	var ids []string
+	for _, a := range agents {
+		if a.Found && (chosen == nil || slices.Contains(chosen, a.ID)) {
+			ids = append(ids, a.ID)
+		}
+	}
+	return ids
 }
 
 func fillFromSystem(s *model.Session) {
