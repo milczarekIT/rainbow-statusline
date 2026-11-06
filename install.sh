@@ -75,14 +75,15 @@ main() {
 	mv -f "$dir/$name.new" "$dir/$name"
 
 	printf 'Installed %s\n' "$dir/$name"
+	next="$dir/$name"
 	case ":$PATH:" in
-	*":$dir:"*) ;;
+	*":$dir:"*) next="$name" ;;
 	*)
 		# shellcheck disable=SC2016 # the $PATH in the printed line must stay literal
 		printf '\n%s is not on your PATH. Add this line to your shell profile (~/.zshrc for zsh, ~/.bashrc for bash):\n  export PATH="%s:$PATH"\n' "$dir" "$dir"
 		;;
 	esac
-	printf '\nNext: run  %s  to set it up.\n' "$dir/$name"
+	printf '\nNext: run  %s  to set it up.\n' "$next"
 }
 
 main "$@"
