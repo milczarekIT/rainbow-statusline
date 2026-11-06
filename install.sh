@@ -82,7 +82,12 @@ main() {
 		printf '\n%s is not on your PATH. Add this line to your shell profile (~/.zshrc for zsh, ~/.bashrc for bash):\n  export PATH="%s:$PATH"\n' "$dir" "$dir"
 		;;
 	esac
-	printf '\nNext: run  %s  to set it up.\n' "$dir/$name"
+	next="$dir/$name"
+	# The short name only if it runs this copy, not another one earlier on PATH.
+	if [ "$(command -v "$name")" = "$next" ]; then
+		next="$name"
+	fi
+	printf '\nNext: run  %s  to set it up.\n' "$next"
 }
 
 main "$@"
